@@ -8,6 +8,7 @@ import logging
 import sqlite3
 import shutil
 import click
+import fileset_db
 
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
@@ -20,15 +21,37 @@ def main(verbose):
     logger.info("Starting data_inbox.py")
     # open database
     logger.info("Backing up database {} to {}".format(FILESET_DATABASE, FILESET_DATABASE_BACKUP))
-    shutil.copy2(FILESET_DATABASE, FILESET_DATABASE_BACKUP)
+    #shutil.copy2(FILESET_DATABASE, FILESET_DATABASE_BACKUP)
     logger.info("Opening database: {}".format(FILESET_DATABASE))
     conn = sqlite3.connect(FILESET_DATABASE)
     c = conn.cursor()
 
-    logger.info("Committing changes to {}".format(FILESET_DATABASE))
-    conn.commit()
-    logger.info("Closing {}".format(FILESET_DATABASE))
+    # set up tables
+    create_sql = input("Do you wish to create the needed SQL tables? (y/n)")
+    if(create_sql.upper() == 'Y'):
+        logger.info("Creating necessary tables.")
+        fileset_db.create_empty_tables(conn)
+        logger.info("Committing changes to {}".format(FILESET_DATABASE))
+        conn.commit()
+        logger.info("Closing {}".format(FILESET_DATABASE))
+    else:
+        logger.info("Skipping table creation.")
+
+    # read data into table
+    create_sql = input("Do you wish to read the data into the tables? (y/n)")
+    if(create_sql.upper() == 'Y'):
+        logger.info("Reading in data.")
+        
+    else:
+        logger.info("Skipping reading in data.")
+
+    # read list of partners from table
+    partner_list_query = "SELECT * FROM partners"
+    partner_list = conn.execute(partner_list_query)
+    for item in partner_list:
+        logger.debug(item)
     conn.close()
+
 
 def configure_logging(verbose):
     """Configure the logger."""
