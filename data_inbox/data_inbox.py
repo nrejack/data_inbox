@@ -10,6 +10,7 @@ import shutil
 import click
 import fileset_db
 
+PARTNER_DATA_FILE = 'partner_data.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
 
@@ -41,9 +42,14 @@ def main(verbose):
     create_sql = input("Do you wish to read the data into the tables? (y/n)")
     if(create_sql.upper() == 'Y'):
         logger.info("Reading in data.")
-        
+        with open(PARTNER_DATA_FILE, 'r') as myfile:
+            partner_data = myfile.read()
+        logger.info("Read in {} bytes from {}".format(len(partner_data), PARTNER_DATA_FILE))
+        conn.execute(partner_data)
+        logger.info("Loaded {} into database.".format(PARTNER_DATA_FILE))
     else:
         logger.info("Skipping reading in data.")
+
 
     # read list of partners from table
     partner_list_query = "SELECT * FROM partners"
