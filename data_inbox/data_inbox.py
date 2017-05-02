@@ -11,12 +11,14 @@ import click
 import fileset_db
 
 PARTNER_DATA_FILE = 'partner_data.sql'
+ERROR_CODES_DATA_FILE = 'error_codes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
 
 @click.option('-v', '--verbose', help='Run in verbose mode.', is_flag=True, default=False)
+@click.option('-n', '--nocreate', help='Don\'t prompt for creation of tables and loading data.', is_flag=True, default=False)
 @click.command()
-def main(verbose):
+def main(verbose, nocreate):
     logger = configure_logging(verbose)
 
     logger.info("Starting data_inbox.py")
@@ -25,38 +27,65 @@ def main(verbose):
     #shutil.copy2(FILESET_DATABASE, FILESET_DATABASE_BACKUP)
     logger.info("Opening database: {}".format(FILESET_DATABASE))
     conn = sqlite3.connect(FILESET_DATABASE)
+    conn.row_factory = dict_factory
     c = conn.cursor()
 
     # set up tables
-    create_sql = input("Do you wish to create the needed SQL tables? (y/n)")
-    if(create_sql.upper() == 'Y'):
-        logger.info("Creating necessary tables.")
-        fileset_db.create_empty_tables(conn)
-        logger.info("Committing changes to {}".format(FILESET_DATABASE))
-        conn.commit()
-        logger.info("Closing {}".format(FILESET_DATABASE))
-    else:
-        logger.info("Skipping table creation.")
+    if not nocreate:
+        create_sql = input("Do you wish to create the needed SQL tables? (y/n)")
+        if(create_sql.upper() == 'Y'):
+            logger.info("Creating necessary tables.")
+            fileset_db.create_empty_tables(conn)
+            logger.info("Committing changes to {}".format(FILESET_DATABASE))
+            conn.commit()
+        else:
+            logger.info("Skipping table creation.")
 
     # read data into table
-    create_sql = input("Do you wish to read the data into the tables? (y/n)")
+    if not nocreate:
+        for sql_file in [PARTNER_DATA_FILE, ERROR_CODES_DATA_FILE]:
+            read_in_sql_files(sql_file, logger, conn)
+
+    # read list of partners from table
+    partner_list_query = "SELECT * FROM partners"
+    partner_info = []
+    logger.debug("List of partners")
+    for row in conn.execute(partner_list_query):
+            logger.debug(row)
+            partner_info.append(row)
+
+    # check partner dirs for changes in headers
+    check_partner_dirs(partner_info)
+
+    logger.info("Committing changes to {}".format(FILESET_DATABASE))
+    conn.commit()
+    logger.info("Closing {}".format(FILESET_DATABASE))
+    conn.close()
+
+def read_in_sql_files(sql_file, logger, conn):
+    create_sql = input("Do you wish to read the {} file into the tables? (y/n)".format(sql_file))
     if(create_sql.upper() == 'Y'):
         logger.info("Reading in data.")
-        with open(PARTNER_DATA_FILE, 'r') as myfile:
-            partner_data = myfile.read()
-        logger.info("Read in {} bytes from {}".format(len(partner_data), PARTNER_DATA_FILE))
-        conn.execute(partner_data)
-        logger.info("Loaded {} into database.".format(PARTNER_DATA_FILE))
+        with open(sql_file, 'r') as myfile:
+            sql_file_data = myfile.read()
+        logger.info("Read in {} bytes from {}".format(len(sql_file_data), sql_file))
+        logger.info(sql_file_data)
+        conn.execute(sql_file_data)
+        logger.info("Loaded {} into database.".format(sql_file))
     else:
         logger.info("Skipping reading in data.")
 
 
-    # read list of partners from table
-    partner_list_query = "SELECT * FROM partners"
-    partner_list = conn.execute(partner_list_query)
-    for item in partner_list:
-        logger.debug(item)
-    conn.close()
+
+def check_partner_dirs(partner_info):
+    """Iterate over partners and check each for issues."""
+
+def dict_factory(cursor, row):
+    """Helper function to return dictionary."""
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
 
 
 def configure_logging(verbose):
