@@ -23,7 +23,9 @@ def create_empty_tables(conn):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date DATETIME,
         filename_pattern TEXT,
-        header TEXT
+        filetype INTEGER,
+        header TEXT,
+        FOREIGN KEY (filetype) REFERENCES filetypes(filetype_id)
     )
     """,
 
@@ -38,6 +40,12 @@ def create_empty_tables(conn):
     'error_codes': """CREATE TABLE error_codes (
         id INTEGER PRIMARY KEY,
         error TEXT
+    )
+    """,
+
+    'filetypes': """CREATE TABLE filetypes (
+        filetype_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filetype_name TEXT
     )
     """
     }

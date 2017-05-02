@@ -12,6 +12,7 @@ import fileset_db
 
 PARTNER_DATA_FILE = 'partner_data.sql'
 ERROR_CODES_DATA_FILE = 'error_codes.sql'
+FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
 
@@ -43,7 +44,7 @@ def main(verbose, nocreate):
 
     # read data into table
     if not nocreate:
-        for sql_file in [PARTNER_DATA_FILE, ERROR_CODES_DATA_FILE]:
+        for sql_file in [PARTNER_DATA_FILE, ERROR_CODES_DATA_FILE, FILETYPES_DATA_FILE]:
             read_in_sql_files(sql_file, logger, conn)
 
     # read list of partners from table
