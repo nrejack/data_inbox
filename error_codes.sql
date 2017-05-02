@@ -1,8 +1,9 @@
 --error codes data file
 INSERT INTO error_codes (id, error)
 VALUES
-  (0, 'No change'),
-  (1, 'New column'),
-  (2, 'Column deleted'),
-  (3, 'Header missing'),
-  (4, 'New filename pattern');
+  (1, 'No new data'),
+  (2, 'No change in header'),
+  (3, 'New column'),
+  (4, 'Column deleted'),
+  (5, 'Header missing'),
+  (6, 'New filename pattern');

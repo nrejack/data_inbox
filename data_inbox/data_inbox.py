@@ -36,7 +36,10 @@ def main(verbose, nocreate):
         create_sql = input("Do you wish to create the needed SQL tables? (y/n)")
         if(create_sql.upper() == 'Y'):
             logger.info("Creating necessary tables.")
-            fileset_db.create_empty_tables(conn)
+            try:
+                fileset_db.create_empty_tables(conn)
+            except sqlite3.OperationalError:
+                logger.error("Error: table already exists.")
             logger.info("Committing changes to {}".format(FILESET_DATABASE))
             conn.commit()
         else:
@@ -58,6 +61,9 @@ def main(verbose, nocreate):
     # check partner dirs for changes in headers
     check_partner_dirs(partner_info)
 
+    # report on results
+    run_report(conn, logger)
+
     logger.info("Committing changes to {}".format(FILESET_DATABASE))
     conn.commit()
     logger.info("Closing {}".format(FILESET_DATABASE))
@@ -76,7 +82,12 @@ def read_in_sql_files(sql_file, logger, conn):
     else:
         logger.info("Skipping reading in data.")
 
-
+def run_report(conn, logger):
+    """Report status of current run."""
+    logger.debug("Current run status")
+    report = conn.execute("SELECT * FROM run_status")
+    for row in report:
+        logger.debug(row)
 
 def check_partner_dirs(partner_info):
     """Iterate over partners and check each for issues."""

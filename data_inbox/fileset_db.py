@@ -33,7 +33,9 @@ def create_empty_tables(conn):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date DATETIME,
         filename TEXT,
-        code INTEGER
+        code INTEGER,
+        partner INTEGER,
+        FOREIGN KEY (partner) REFERENCES partners(id)
     )
     """,
 
@@ -44,12 +46,12 @@ def create_empty_tables(conn):
     """,
 
     'filetypes': """CREATE TABLE filetypes (
-        filetype_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filetype_id INTEGER PRIMARY KEY,
         filetype_name TEXT
     )
     """
     }
 
     for item in required_tables:
-        logger.info("Excecuting {}".format(item))
+        logger.info("Executing {}".format(item))
         conn.execute(required_tables[item])
