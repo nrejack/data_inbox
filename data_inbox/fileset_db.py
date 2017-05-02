@@ -29,13 +29,33 @@ def create_empty_tables(conn):
     )
     """,
 
-    'run_status': """CREATE TABLE run_status (
+    'partner_run_status': """CREATE TABLE partner_run_status (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date DATETIME,
-        filename TEXT,
         code INTEGER,
         partner INTEGER,
-        FOREIGN KEY (partner) REFERENCES partners(id)
+        run_id INTEGER,
+        FOREIGN KEY (partner) REFERENCES partners(id),
+        FOREIGN KEY (run_id) REFERENCES global_run_status(id)
+    )
+    """,
+
+    'global_run_status': """CREATE TABLE global_run_status (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_date DATETIME
+    )
+    """,
+
+    'file_run_status': """CREATE TABLE file_run_status (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code INTEGER,
+        partner INTEGER,
+        run_id INTEGER,
+        filename_pattern TEXT,
+        filetype INTEGER,
+        FOREIGN KEY (code) REFERENCES file_error_codes(id),
+        FOREIGN KEY (partner) REFERENCES partners(id),
+        FOREIGN KEY (run_id) REFERENCES global_run_status(id),
+        FOREIGN KEY (filetype) REFERENCES filetype(filetype_id)
     )
     """,
 
@@ -50,7 +70,7 @@ def create_empty_tables(conn):
         error TEXT
     )
     """,
-    
+
     'filetypes': """CREATE TABLE filetypes (
         filetype_id INTEGER PRIMARY KEY,
         filetype_name TEXT

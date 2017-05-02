@@ -10,6 +10,7 @@ import shutil
 import click
 import fileset_db
 import os
+import datetime
 
 PARTNER_DATA_FILE = 'partner_data.sql'
 PARTNER_ERROR_CODES_DATA_FILE = 'partner_error_codes.sql'
@@ -42,10 +43,10 @@ def main(verbose, nocreate):
                 fileset_db.create_empty_tables(conn)
             except sqlite3.OperationalError:
                 logger.error("Error: table already exists.")
-            logger.info("Committing changes to {}".format(FILESET_DATABASE))
-            conn.commit()
         else:
             logger.info("Skipping table creation.")
+        commit_tran(conn, logger)
+
 
     # read data into table
     if not nocreate:
@@ -53,25 +54,49 @@ def main(verbose, nocreate):
             read_in_sql_files(sql_file, logger, conn)
 
     # read list of partners from table
-    partner_list_query = "SELECT name, name_full, file_directory FROM partners"
-    partner_info = []
-    logger.debug("List of partners")
+    partner_list_query = "SELECT id, name, name_full, file_directory FROM partners"
+    partner_info = {}
+    logger.debug("Dictionary of partners")
     for row in conn.execute(partner_list_query):
             logger.debug(row)
-            partner_info.append(row)
+            partner_info[row['id']] = row
+
+    # get the next key for the global_run_status
+    global_run_status_id = check_run_id(c, conn, logger)
 
     # check partner dirs for changes in headers
-    check_partner_dirs(partner_info, conn, logger)
+    check_partner_dirs(partner_info, conn, logger, global_run_status_id)
 
     # report on results
-    run_report(conn, logger)
-
-    logger.info("Committing changes to {}".format(FILESET_DATABASE))
-    conn.commit()
+    run_report(conn, logger, global_run_status_id, partner_info)
+    commit_tran(conn, logger)
     logger.info("Closing {}".format(FILESET_DATABASE))
     conn.close()
 
+def check_run_id(c, conn, logger):
+    """Check the previous run's ID and get the current run's ID.
+        Update the DB with the new record."""
+    logger.info("Getting the next ID for the global_run_status")
+    c.execute("SELECT MAX(id) FROM global_run_status;")
+    penultiumate_run_id = c.fetchone()['MAX(id)']
+    logger.debug("Penultiumate run ID: {}".format(penultiumate_run_id))
+    if penultiumate_run_id is None:
+        global_run_status_id = 1
+    else:
+        global_run_status_id = penultiumate_run_id + 1
+    logger.info("This is global_run_status id {}".format(global_run_status_id))
+    # update the run table
+    current_date = datetime.datetime.now()
+    conn.execute("INSERT INTO global_run_status (run_date) VALUES (current_date)")
+    return global_run_status_id
+
+def commit_tran(conn, logger):
+    """Helper function to commit changes to DB."""
+    logger.info("Committing changes to {}".format(FILESET_DATABASE))
+    conn.commit()
+
 def read_in_sql_files(sql_file, logger, conn):
+    """Read passed in .sql files to load their data into the DB."""
     create_sql = input("Do you wish to read the {} file into the tables? (y/n)".format(sql_file))
     if(create_sql.upper() == 'Y'):
         logger.info("Reading in data.")
@@ -83,37 +108,43 @@ def read_in_sql_files(sql_file, logger, conn):
         logger.info("Loaded {} into database.".format(sql_file))
     else:
         logger.info("Skipping reading in data.")
-    logger.info("Committing changes to {}".format(FILESET_DATABASE))
-    conn.commit()
+    commit_tran(conn, logger)
 
-def run_report(conn, logger):
+def run_report(conn, logger, global_run_status_id, partner_info):
     """Report status of current run."""
     logger.debug("Current run status")
-    report = conn.execute("SELECT * FROM run_status")
+    #logger.debug(partner_info)
+    report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=?", (int(global_run_status_id),))
+    # TODO refactor this for reporting vs. checking what the status is
     for row in report:
-        logger.debug(row)
+        #logger.debug(row)
+        partner_name = partner_info[row['partner']]['name_full']
+        partner_directory = partner_info[row['partner']]['file_directory']
+        if row['code'] == 1:
+            logger.info("Partner {} has no new data in the current run {}".format(partner_name, global_run_status_id))
+        if row['code'] == 2:
+            logger.info("Partner {} directory {} not found in the current run {}".format(partner_name, partner_directory, global_run_status_id))
+        if row['code'] == 3:
+            logger.info("Partner {} has new files in the current run {}".format(partner_name, global_run_status_id))
 
-def check_partner_dirs(partner_info, conn, logger):
-    """Iterate over partners and check each for issues.
-        get list of partners from TABLE
-        iterate over list
-            check if directory is empty
-                yes: insert row saying error code 1
-                no: header inspection
-
-    """
-
+def check_partner_dirs(partner_info, conn, logger, global_run_status_id):
+    """Iterate over partners and check to see if there are files."""
     # get list of partners and locations of files
-    partner_list_query =("SELECT name, name_full, file_directory FROM partners")
+    partner_list_query =("SELECT id, name, name_full, file_directory FROM partners")
     partner_list = conn.execute(partner_list_query)
     for partner in partner_list:
+        error_code = None
         logger.info("Now checking {}".format(partner['name_full']))
         if not os.path.isdir(partner['file_directory']):
             logger.error("Path {} not found for {}".format(partner['file_directory'], partner['name_full']))
-            error_code = 2
+            error_code = 2  # directory missing
         elif not os.listdir(partner['file_directory']):
             logger.info("Path {} empty found for {}".format(partner['file_directory'], partner['name_full']))
-            error_code = 1
+            error_code = 1  # no files, therefore no new files
+        else:
+            error_code = 3
+        if error_code:
+            conn.execute('INSERT INTO partner_run_status (code, partner, run_id) VALUES (?, ?, ?)', (error_code, partner['id'], global_run_status_id))
 
 def dict_factory(cursor, row):
     """Helper function to return dictionary."""
