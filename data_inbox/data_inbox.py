@@ -9,9 +9,11 @@ import sqlite3
 import shutil
 import click
 import fileset_db
+import os
 
 PARTNER_DATA_FILE = 'partner_data.sql'
-ERROR_CODES_DATA_FILE = 'error_codes.sql'
+PARTNER_ERROR_CODES_DATA_FILE = 'partner_error_codes.sql'
+FILE_ERROR_CODES_DATA_FILE = 'file_error_codes.sql'
 FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
@@ -47,11 +49,11 @@ def main(verbose, nocreate):
 
     # read data into table
     if not nocreate:
-        for sql_file in [PARTNER_DATA_FILE, ERROR_CODES_DATA_FILE, FILETYPES_DATA_FILE]:
+        for sql_file in [PARTNER_DATA_FILE, PARTNER_ERROR_CODES_DATA_FILE, FILE_ERROR_CODES_DATA_FILE, FILETYPES_DATA_FILE]:
             read_in_sql_files(sql_file, logger, conn)
 
     # read list of partners from table
-    partner_list_query = "SELECT * FROM partners"
+    partner_list_query = "SELECT name, name_full, file_directory FROM partners"
     partner_info = []
     logger.debug("List of partners")
     for row in conn.execute(partner_list_query):
@@ -59,7 +61,7 @@ def main(verbose, nocreate):
             partner_info.append(row)
 
     # check partner dirs for changes in headers
-    check_partner_dirs(partner_info)
+    check_partner_dirs(partner_info, conn, logger)
 
     # report on results
     run_report(conn, logger)
@@ -81,6 +83,8 @@ def read_in_sql_files(sql_file, logger, conn):
         logger.info("Loaded {} into database.".format(sql_file))
     else:
         logger.info("Skipping reading in data.")
+    logger.info("Committing changes to {}".format(FILESET_DATABASE))
+    conn.commit()
 
 def run_report(conn, logger):
     """Report status of current run."""
@@ -89,8 +93,27 @@ def run_report(conn, logger):
     for row in report:
         logger.debug(row)
 
-def check_partner_dirs(partner_info):
-    """Iterate over partners and check each for issues."""
+def check_partner_dirs(partner_info, conn, logger):
+    """Iterate over partners and check each for issues.
+        get list of partners from TABLE
+        iterate over list
+            check if directory is empty
+                yes: insert row saying error code 1
+                no: header inspection
+
+    """
+
+    # get list of partners and locations of files
+    partner_list_query =("SELECT name, name_full, file_directory FROM partners")
+    partner_list = conn.execute(partner_list_query)
+    for partner in partner_list:
+        logger.info("Now checking {}".format(partner['name_full']))
+        if not os.path.isdir(partner['file_directory']):
+            logger.error("Path {} not found for {}".format(partner['file_directory'], partner['name_full']))
+            error_code = 2
+        elif not os.listdir(partner['file_directory']):
+            logger.info("Path {} empty found for {}".format(partner['file_directory'], partner['name_full']))
+            error_code = 1
 
 def dict_factory(cursor, row):
     """Helper function to return dictionary."""

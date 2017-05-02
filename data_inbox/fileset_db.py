@@ -39,12 +39,18 @@ def create_empty_tables(conn):
     )
     """,
 
-    'error_codes': """CREATE TABLE error_codes (
+    'partner_error_codes': """CREATE TABLE partner_error_codes (
         id INTEGER PRIMARY KEY,
         error TEXT
     )
     """,
 
+    'file_error_codes': """CREATE TABLE file_error_codes (
+        id INTEGER PRIMARY KEY,
+        error TEXT
+    )
+    """,
+    
     'filetypes': """CREATE TABLE filetypes (
         filetype_id INTEGER PRIMARY KEY,
         filetype_name TEXT
