@@ -29,9 +29,11 @@ def main(verbose, nocreate):
     logger = configure_logging(verbose)
 
     logger.info("Starting data_inbox.py")
-    # open database
-    logger.info("Backing up database {} to {}".format(FILESET_DATABASE, FILESET_DATABASE_BACKUP))
-    shutil.copy2(FILESET_DATABASE, FILESET_DATABASE_BACKUP)
+    # backup db if it already exists
+    if os.path.isfile(FILESET_DATABASE):
+        logger.info("Backing up database {} to {}".format(FILESET_DATABASE, FILESET_DATABASE_BACKUP))
+        shutil.copy2(FILESET_DATABASE, FILESET_DATABASE_BACKUP)
+    # open existing db
     logger.info("Opening database: {}".format(FILESET_DATABASE))
     conn = sqlite3.connect(FILESET_DATABASE)
     conn.row_factory = dict_factory
@@ -86,17 +88,18 @@ def check_run_id(c, conn, logger):
     """Check the previous run's ID and get the current run's ID.
         Update the DB with the new record."""
     logger.info("Getting the next ID for the global_run_status")
-    c.execute("SELECT MAX(id) FROM global_run_status;")
+    c.execute("SELECT MAX(id) FROM current_run_status;")
     penultiumate_run_id = c.fetchone()['MAX(id)']
-    logger.debug("Penultiumate run ID: %i", penultiumate_run_id)
     if penultiumate_run_id is None:
         current_run_id = 1
+        penultiumate_run_id = 0
     else:
         current_run_id = penultiumate_run_id + 1
-    logger.info("This is global_run_status id {}".format(current_run_id))
+    logger.debug("Penultiumate run ID: %i", penultiumate_run_id)
+    logger.info("This is current_run_status id {}".format(current_run_id))
     # update the run table
     current_date = datetime.datetime.now()
-    conn.execute("INSERT INTO global_run_status (run_date) VALUES (current_date)")
+    conn.execute("INSERT INTO current_run_status (run_date) VALUES (current_date)")
     return current_run_id
 
 def commit_tran(conn, logger):
@@ -134,8 +137,8 @@ def run_report(conn, logger, current_run_id, partner_info):
             logger.info("Partner {} has no new data in the current run {}"\
                         .format(partner_name, current_run_id))
         if row['code'] == 2:
-            logger.info("Partner {} directory {} not found in the current run \
-                {}".format(partner_name, partner_directory, current_run_id))
+            logger.info("Partner {} directory {} not found in the current run {}\
+                ".format(partner_name, partner_directory, current_run_id))
         if row['code'] == 3:
             logger.info("Partner {} has new files in the current run {}" \
                 .format(partner_name, current_run_id))
