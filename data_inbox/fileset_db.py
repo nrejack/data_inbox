@@ -22,11 +22,13 @@ def create_empty_tables(conn):
 
         'partners_filesets': """ CREATE TABLE partners_filesets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pid INTEGER,
         date DATETIME,
         filename_pattern TEXT,
         filetype INTEGER,
         header TEXT,
         FOREIGN KEY (filetype) REFERENCES filetypes(filetype_id)
+        FOREIGN KEY (pid) REFERENCES partners(id)
         )
         """,
 
@@ -36,7 +38,7 @@ def create_empty_tables(conn):
         partner INTEGER,
         run_id INTEGER,
         FOREIGN KEY (partner) REFERENCES partners(id),
-        FOREIGN KEY (run_id) REFERENCES global_run_status(id)
+        FOREIGN KEY (run_id) REFERENCES current_run_status(id)
         )
         """,
 
@@ -55,7 +57,7 @@ def create_empty_tables(conn):
         filetype INTEGER,
         FOREIGN KEY (code) REFERENCES file_error_codes(id),
         FOREIGN KEY (partner) REFERENCES partners(id),
-        FOREIGN KEY (run_id) REFERENCES global_run_status(id),
+        FOREIGN KEY (run_id) REFERENCES current_run_status(id),
         FOREIGN KEY (filetype) REFERENCES filetype(filetype_id)
         )
         """,
