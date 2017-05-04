@@ -195,27 +195,56 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
         # TODO new function here
         # load the previous fileset info
         partner_fileset_sql = conn.execute("SELECT * FROM partners_filesets WHERE pid=?", (int(id),))
+
         #for item in partner_fileset_sql:
         #    logger.debug(item)
-        #if len(partner_fileset_sql) == 0:
-        #    logger.warning("No previous recorded fileset stored for {}".format(name_full))
-        #    logger.warning("Adding new files to database.")
-        #else:
-        # read the partner_fileset into a dict
+
         partner_fileset = []
         for item in partner_fileset_sql:
             partner_fileset.append({'pid': item['pid'], 'filetype': item['filetype'], 'filename_pattern': item['filename_pattern'], 'header': item['header']})
+
         logger.info("Loaded previous fileset for {}".format(name_full))
-        logger.debug(partner_fileset)
-        new_fileset = os.listdir(partner_directory)
-        for item in new_fileset:
-            logger.debug("Now checking file {}".format(item))
-            # find a match
-            # TODO: make this work on non-exact matching
-            with open(partner_directory + item, 'r') as f:
-                header_row = f.readline()
-                logger.debug("Header for file {}:\n{}".format(item, header_row.strip()))
-                header_cols = header_row.split(",")
+        if len(partner_fileset) == 0:
+            logger.warning("No previous recorded fileset stored for {}".format(name_full))
+            logger.warning("Adding new files to database.")
+            logger.fatal("NOT IMPLEMENTED: method to add new files to db")
+            logger.fatal('{} will not be checked in this run.'.format(name_full))
+        else:
+            logger.debug(partner_fileset)
+            new_fileset = os.listdir(partner_directory)
+            for new_file in new_fileset:
+                logger.debug("Now checking file {}".format(new_file))
+                # find a match
+                # search the fileset to find a matching filename
+                for row in partner_fileset:
+                    # previous filename
+                    filename = row['filename_pattern'].split('.')[0]
+                    # current filename check
+                    new_file_trim = new_file.split('.')[0]
+                    if new_file_trim == filename:
+                        logger.info("Match found: {}".format(filename))
+                        check_header(new_file, partner_directory, row['header'], logger)
+                    else:
+                        logger.info("match not found for {} {}".format(item_trim, filename))
+
+def check_header(new_file, partner_directory, prev_header, logger):
+    """Check new file header against previous header."""
+    # TODO: make this work on non-exact matching
+    with open(partner_directory + new_file, 'r') as f:
+        header_row = f.readline().strip()
+        logger.debug("Header for file {}:\n{}".format(new_file, header_row.strip()))
+        header_cols = header_row.split(",")
+        prev_header = prev_header.split(",")
+        logger.debug(header_cols)
+        logger.debug(prev_header)
+        # iterate over old header, deleting any cols in new header that match
+        for old_col in prev_header:
+            logger.debug("Column header match: {}".format(old_col))
+            header_cols.remove(old_col)
+
+        logger.debug("After matching columns: {}".format(len(header_cols)))
+        if len(header_cols) == 0:
+            logger.info("{} header matches old header. No change in header.".format(new_file))
 
 
 
