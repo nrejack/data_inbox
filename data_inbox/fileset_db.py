@@ -12,7 +12,10 @@ def create_empty_tables(conn):
     """Create the table structure required for the data model."""
     logger.warning('This will initialize the required tables.')
     required_tables = {
-        'partners': """CREATE TABLE partners (
+        'partners': """
+        -- this table stores the partners, their names, and the location
+        -- of their files
+        CREATE TABLE partners (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         name_full TEXT,
@@ -20,7 +23,10 @@ def create_empty_tables(conn):
         )
         """,
 
-        'partners_filesets': """ CREATE TABLE partners_filesets (
+        'partners_filesets': """
+        -- this table stores the headers of previous files for each partner,
+        -- and identifies what type of file each is
+        CREATE TABLE partners_filesets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         pid INTEGER,
         date DATETIME,
@@ -32,7 +38,9 @@ def create_empty_tables(conn):
         )
         """,
 
-        'partner_run_status': """CREATE TABLE partner_run_status (
+        'partner_run_status': """
+
+        CREATE TABLE partner_run_status (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         code INTEGER,
         partner INTEGER,
@@ -62,19 +70,25 @@ def create_empty_tables(conn):
         )
         """,
 
-        'partner_error_codes': """CREATE TABLE partner_error_codes (
+        'partner_error_codes': """
+        -- this table stores the error codes at the partner level
+        CREATE TABLE partner_error_codes (
         id INTEGER PRIMARY KEY,
         error TEXT
         )
         """,
 
-        'file_error_codes': """CREATE TABLE file_error_codes (
+        'file_error_codes': """
+        -- this table stores the error codes for file-level errors
+        CREATE TABLE file_error_codes (
         id INTEGER PRIMARY KEY,
         error TEXT
         )
         """,
 
-        'filetypes': """CREATE TABLE filetypes (
+        'filetypes': """
+        -- this table stores the different type of files used in the PCORI CDM
+        CREATE TABLE filetypes (
         filetype_id INTEGER PRIMARY KEY,
         filetype_name TEXT
         )
