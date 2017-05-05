@@ -193,44 +193,48 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
         name_full = partner['name_full']
         pid = partner['id']
         logger.info("Now checking {} ".format(name_full))
-        # TODO new function here
         # load the previous fileset info
-        partner_fileset_sql = conn.execute("SELECT * FROM \
-            partners_filesets WHERE pid=?", (int(pid),))
+        partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
+        new_fileset = os.listdir(partner_directory)
+        for new_file in new_fileset:
+            logger.debug("Now checking file {}".format(new_file))
+            # find a match
+            # search the fileset to find a matching filename
+            for row in partner_fileset:
+                # previous filename
+                filename = row['filename_pattern'].split('.')[0]
+                # current filename check
+                new_file_trim = new_file.split('.')[0]
+                if new_file_trim == filename:
+                    logger.info("Match found: {}".format(filename))
+                    check_header(new_file, partner_directory, row['header'], logger)
+                else:
+                    logger.info("match not found for {} {}".format(new_file_trim, filename))
 
-        #for item in partner_fileset_sql:
-        #    logger.debug(item)
+def load_previous_fileset(conn, pid, logger, name_full):
+    """Load previous fileset for a specified (pid) partner."""
+    partner_fileset_sql = conn.execute("SELECT * FROM \
+        partners_filesets WHERE pid=?", (int(pid),))
 
-        partner_fileset = []
-        for item in partner_fileset_sql:
-            partner_fileset.append({'pid': item['pid'], \
-                'filetype': item['filetype'], \
-                'filename_pattern': item['filename_pattern'], \
-                'header': item['header']})
+    #for item in partner_fileset_sql:
+    #    logger.debug(item)
 
-        logger.info("Loaded previous fileset for {}".format(name_full))
-        if len(partner_fileset) == 0:
-            logger.warning("No previous recorded fileset stored for {}".format(name_full))
-            logger.warning("Adding new files to database.")
-            logger.fatal("NOT IMPLEMENTED: method to add new files to db")
-            logger.fatal('{} will not be checked in this run.'.format(name_full))
-        else:
-            logger.debug(partner_fileset)
-            new_fileset = os.listdir(partner_directory)
-            for new_file in new_fileset:
-                logger.debug("Now checking file {}".format(new_file))
-                # find a match
-                # search the fileset to find a matching filename
-                for row in partner_fileset:
-                    # previous filename
-                    filename = row['filename_pattern'].split('.')[0]
-                    # current filename check
-                    new_file_trim = new_file.split('.')[0]
-                    if new_file_trim == filename:
-                        logger.info("Match found: {}".format(filename))
-                        check_header(new_file, partner_directory, row['header'], logger)
-                    else:
-                        logger.info("match not found for {} {}".format(new_file_trim, filename))
+    partner_fileset = []
+    for item in partner_fileset_sql:
+        partner_fileset.append({'pid': item['pid'], \
+            'filetype': item['filetype'], \
+            'filename_pattern': item['filename_pattern'], \
+            'header': item['header']})
+
+    logger.info("Loaded previous fileset for {}".format(name_full))
+    if len(partner_fileset) == 0:
+        logger.warning("No previous recorded fileset stored for {}".format(name_full))
+        logger.warning("Adding new files to database.")
+        logger.fatal("NOT IMPLEMENTED: method to add new files to db")
+        logger.fatal('{} will not be checked in this run.'.format(name_full))
+    else:
+        logger.debug(partner_fileset)
+    return partner_fileset
 
 def check_header(new_file, partner_directory, prev_header, logger):
     """Check new file header against previous header."""
@@ -251,16 +255,12 @@ def check_header(new_file, partner_directory, prev_header, logger):
         if len(header_cols) == 0:
             logger.info("{} header matches old header. No change in header.".format(new_file))
 
-
-
-
 def dict_factory(cursor, row):
     """Helper function to return dictionary."""
     d = {}
     for idx, col in enumerate(cursor.description):
         d[col[0]] = row[idx]
     return d
-
 
 def configure_logging(verbose):
     """Configure the logger."""
@@ -282,7 +282,6 @@ def configure_logging(verbose):
         ch.setLevel(logging.WARNING)
     ch.setFormatter(formatter)
     logger.addHandler(ch)
-
     return logger
 
 if __name__ == '__main__':
