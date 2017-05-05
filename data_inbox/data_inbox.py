@@ -31,7 +31,8 @@ def main(verbose, nocreate):
     logger.info("Starting data_inbox.py")
     # backup db if it already exists
     if os.path.isfile(FILESET_DATABASE):
-        logger.info("Backing up database {} to {}".format(FILESET_DATABASE, FILESET_DATABASE_BACKUP))
+        logger.info("Backing up database {} to {}".format(FILESET_DATABASE, \
+            FILESET_DATABASE_BACKUP))
         shutil.copy2(FILESET_DATABASE, FILESET_DATABASE_BACKUP)
     # open existing db
     logger.info("Opening database: {}".format(FILESET_DATABASE))
@@ -190,18 +191,22 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
     # now check the list
     for partner in partners_to_check:
         name_full = partner['name_full']
-        id = partner['id']
+        pid = partner['id']
         logger.info("Now checking {} ".format(name_full))
         # TODO new function here
         # load the previous fileset info
-        partner_fileset_sql = conn.execute("SELECT * FROM partners_filesets WHERE pid=?", (int(id),))
+        partner_fileset_sql = conn.execute("SELECT * FROM \
+            partners_filesets WHERE pid=?", (int(pid),))
 
         #for item in partner_fileset_sql:
         #    logger.debug(item)
 
         partner_fileset = []
         for item in partner_fileset_sql:
-            partner_fileset.append({'pid': item['pid'], 'filetype': item['filetype'], 'filename_pattern': item['filename_pattern'], 'header': item['header']})
+            partner_fileset.append({'pid': item['pid'], \
+                'filetype': item['filetype'], \
+                'filename_pattern': item['filename_pattern'], \
+                'header': item['header']})
 
         logger.info("Loaded previous fileset for {}".format(name_full))
         if len(partner_fileset) == 0:
@@ -225,7 +230,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                         logger.info("Match found: {}".format(filename))
                         check_header(new_file, partner_directory, row['header'], logger)
                     else:
-                        logger.info("match not found for {} {}".format(item_trim, filename))
+                        logger.info("match not found for {} {}".format(new_file_trim, filename))
 
 def check_header(new_file, partner_directory, prev_header, logger):
     """Check new file header against previous header."""
