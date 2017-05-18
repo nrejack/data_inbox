@@ -23,8 +23,10 @@ FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
     is_flag=True, default=False)
 @click.option('-n', '--nocreate', help='Don\'t prompt for creation of tables \
     and loading data.', is_flag=True, default=False)
+@click.option('-b', '--buildfileset', help='Build fileset for partner.', \
+    is_flag=True, default=False)
 @click.command()
-def main(verbose, nocreate):
+def main(verbose, nocreate, buildfileset):
     """main function for data_inbox."""
     logger = configure_logging(verbose)
 
@@ -72,6 +74,10 @@ def main(verbose, nocreate):
     # get the next key for the run id
     current_run_id = check_run_id(c, conn, logger)
 
+    # build fileset, and stop execution after
+    if buildfileset:
+        add_new_fileset(conn, logger)
+        exit()
     # check partner dirs for files
     check_partner_dirs(partner_info, conn, logger, current_run_id)
 
@@ -205,7 +211,8 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 filename = row['filename_pattern'].split('.')[0]
                 # current filename check
                 new_file_trim = new_file.split('.')[0]
-                if new_file_trim == filename:
+                # ignore case in comparison
+                if new_file_trim.upper() == filename.upper():
                     logger.info("Match found: {}".format(filename))
                     check_header(new_file, partner_directory, row['header'], logger)
                 else:
@@ -226,15 +233,81 @@ def load_previous_fileset(conn, pid, logger, name_full):
             'filename_pattern': item['filename_pattern'], \
             'header': item['header']})
 
-    logger.info("Loaded previous fileset for {}".format(name_full))
+    logger.info("Loading previous fileset for {}".format(name_full))
     if len(partner_fileset) == 0:
         logger.warning("No previous recorded fileset stored for {}".format(name_full))
-        logger.warning("Adding new files to database.")
-        logger.fatal("NOT IMPLEMENTED: method to add new files to db")
         logger.fatal('{} will not be checked in this run.'.format(name_full))
     else:
         logger.debug(partner_fileset)
     return partner_fileset
+
+def add_new_fileset(conn, logger):
+    """Read files on disk and build a new fileset record for the partner."""
+    partner_list = get_partner_list(conn, logger)
+    filetype_dict = get_filetype_dict(conn, logger)
+    logger.info("Current list of partners")
+    logger.info(partner_list)
+    for partner in partner_list:
+        name = partner_list[partner]['name']
+        directory = partner_list[partner]['file_directory']
+        logger.info("Now building fileset for {}".format(name))
+        try:
+            list_of_files = os.listdir(directory)
+        except:
+            logger.error("Directory {} not found.".format(directory))
+        if not list_of_files:
+            logger.info("File directory empty for {}. Skipping building fileset.".format(name))
+        else:
+            for new_file in list_of_files:
+                logger.info("Now trying to add file {} to fileset.".format(new_file))
+                guess_filetype(new_file, filetype_dict, conn, logger)
+
+def get_filetype_dict(conn, logger):
+    """Utility function that gets the dict of filetypes."""
+    # TODO replace * in SELECT with column names
+    filetypes = conn.execute("SELECT * FROM filetypes")
+    filetypes_dict = {}
+    for item in filetypes:
+        filetypes_dict[item['filetype_name'].upper()] = item['filetype_id']
+    return filetypes_dict
+
+def get_partner_list(conn, logger):
+    """Utility function that gets the list of partners and their attributes"""
+    partner_data = conn.execute("SELECT * FROM partners")
+    partner_dict = {}
+    for partner in partner_data:
+        partner_key = partner['id']
+        partner_dict[partner_key] = {'name': partner['name'], 'file_directory': partner['file_directory']}
+    return partner_dict
+
+def guess_filetype(new_file, filetype_dict, conn, logger):
+    """Given an incoming file, guess the filetype."""
+    # TODO restructure this to streamline the matching logic
+    #logger.info(filetype_dict)
+    # take the file extension off
+    new_file = new_file.split('.')[0]
+    new_file_upper = new_file.upper()
+    file_matched = False
+    # try exact match (case doesn't matter) first
+    if new_file_upper in filetype_dict.keys():
+        logger.info("Exact match found: {} looks like a {} file.".format(new_file, new_file))
+        new_file_id = filetype_dict[new_file_upper]
+        add_to_filetype_dict(conn, logger)
+        file_matched = True
+    # try to find as a substring
+    if not file_matched:
+        for item in filetype_dict.keys():
+            if item.find(new_file_upper) == -1 or new_file_upper.find(item) == -1:
+                logger.info("Partial match found for {}: looks like a {} file".format(new_file))
+                add_to_filetype_dict(conn, logger)
+                file_matched = True
+                break
+    if not file_matched:
+        logger.info("No full match found for {}. Not sure what it is.".format(new_file))
+
+def add_to_filetype_dict(conn, logger):
+    """Function to add a new file to the filetype dictionary."""
+    logger.warning("add_to_filetype_dict not yet implemented. NOOP")
 
 def check_header(new_file, partner_directory, prev_header, logger):
     """Check new file header against previous header."""
