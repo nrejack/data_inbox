@@ -11,6 +11,8 @@ import os
 import datetime
 import click
 import fileset_db
+import time
+from fuzzywuzzy import fuzz
 
 PARTNER_DATA_FILE = 'partner_data.sql'
 PARTNER_ERROR_CODES_DATA_FILE = 'partner_error_codes.sql'
@@ -18,6 +20,8 @@ FILE_ERROR_CODES_DATA_FILE = 'file_error_codes.sql'
 FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
+# set the minimum match ratio for fuzzy matching
+MATCH_RATIO = 80
 
 @click.option('-v', '--verbose', help='Run in verbose mode.', \
     is_flag=True, default=False)
@@ -250,17 +254,20 @@ def add_new_fileset(conn, logger):
     for partner in partner_list:
         name = partner_list[partner]['name']
         directory = partner_list[partner]['file_directory']
-        logger.info("Now building fileset for {}".format(name))
         try:
             list_of_files = os.listdir(directory)
         except:
             logger.error("Directory {} not found.".format(directory))
+            continue
         if not list_of_files:
             logger.info("File directory empty for {}. Skipping building fileset.".format(name))
         else:
+            logger.info("Now building fileset for {}".format(name))
             for new_file in list_of_files:
+                with open(directory + new_file, 'r') as f:
+                    header = f.readline()
                 logger.info("Now trying to add file {} to fileset.".format(new_file))
-                guess_filetype(new_file, filetype_dict, conn, logger)
+                guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
 
 def get_filetype_dict(conn, logger):
     """Utility function that gets the dict of filetypes."""
@@ -280,7 +287,7 @@ def get_partner_list(conn, logger):
         partner_dict[partner_key] = {'name': partner['name'], 'file_directory': partner['file_directory']}
     return partner_dict
 
-def guess_filetype(new_file, filetype_dict, conn, logger):
+def guess_filetype(partner, new_file, filetype_dict, header, conn, logger):
     """Given an incoming file, guess the filetype."""
     # TODO restructure this to streamline the matching logic
     #logger.info(filetype_dict)
@@ -290,24 +297,42 @@ def guess_filetype(new_file, filetype_dict, conn, logger):
     file_matched = False
     # try exact match (case doesn't matter) first
     if new_file_upper in filetype_dict.keys():
-        logger.info("Exact match found: {} looks like a {} file.".format(new_file, new_file))
-        new_file_id = filetype_dict[new_file_upper]
-        add_to_filetype_dict(conn, logger)
+        logger.info("Exact match found: {} looks like a {} file.".format(new_file, new_file.upper()))
+        filetype_id = filetype_dict[new_file_upper]
+        add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger)
         file_matched = True
-    # try to find as a substring
+    # try to find as a substring or do fuzzy match
     if not file_matched:
         for item in filetype_dict.keys():
-            if item.find(new_file_upper) == -1 or new_file_upper.find(item) == -1:
-                logger.info("Partial match found for {}: looks like a {} file".format(new_file))
-                add_to_filetype_dict(conn, logger)
+            filetype_id = filetype_dict[item]
+            #logger.debug(item)
+            #logger.debug(new_file_upper)
+            #logger.debug(fuzz.ratio(new_file_upper, item))
+            if fuzz.ratio(new_file_upper, item) > MATCH_RATIO or new_file_upper.find(item) != -1:
+                logger.info("Partial match found for {}: looks like a {} file".format(new_file, item))
+                add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger)
                 file_matched = True
                 break
     if not file_matched:
         logger.info("No full match found for {}. Not sure what it is.".format(new_file))
 
-def add_to_filetype_dict(conn, logger):
+def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
     """Function to add a new file to the filetype dictionary."""
-    logger.warning("add_to_filetype_dict not yet implemented. NOOP")
+    logger.info("Adding new filetype record for partner {} for filetype_id {}".format(partner, filetype_id))
+    date_now = time.strftime('%Y-%m-%d %H:%M:%S')
+    # get existing filetype record
+    existing_filetype_row = conn.execute("SELECT * FROM partners_filesets WHERE pid = ? AND filetype = ?", (partner, filetype_id))
+    if existing_filetype_row:
+        logger.info("Existing filetype record found for partner {} and filetype {}".format(partner, filetype_id))
+        logger.info("Deleting previous filetype records from partners_filesets")
+        delete_tran = conn.execute("DELETE FROM partners_filesets WHERE pid = ? AND filetype = ?", (partner, filetype_id))
+        commit_tran(conn, logger)
+    else:
+        logger.info("No existing filetype record found for partner  {} and filetype {}".format(partner, filetype_id))
+    logger.info("Adding new filetype record.")
+    result = conn.execute("INSERT INTO partners_filesets (pid, date, filename_pattern, filetype, header) VALUES (?, ?, ?, ?, ?)", (int(partner), date_now, new_file, filetype_id, header))
+    commit_tran(conn, logger)
+    #logger.warning("add_to_filetype_dict not yet implemented. NOOP")
 
 def check_header(new_file, partner_directory, prev_header, logger):
     """Check new file header against previous header."""
