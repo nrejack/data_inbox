@@ -13,6 +13,8 @@ import click
 import fileset_db
 import time
 from fuzzywuzzy import fuzz
+import smtplib
+from email.mime.text import MIMEText
 
 PARTNER_DATA_FILE = 'partner_data.sql'
 PARTNER_ERROR_CODES_DATA_FILE = 'partner_error_codes.sql'
@@ -381,6 +383,23 @@ def configure_logging(verbose):
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     return logger
+
+
+def send_report(report, from_address, to_address, mail_server):
+    """Sends the report via email.
+    Keyword arguments:
+    report -- the report as a string.
+    from_address -- email address the report will come from.
+    to_address -- email address the report is going to.
+    """
+    msg = MIMEText(report)
+    msg['Subject'] = \
+        "data_inbox report for " + str(datetime.now()) + "\n"
+    msg['From'] = from_address
+    msg['To'] = to_address
+    mail_connection = smtplib.SMTP(mail_server)
+    mail_connection.sendmail(from_address, to_address, msg.as_string())
+    mail_connection.quit()
 
 if __name__ == '__main__':
     main()
