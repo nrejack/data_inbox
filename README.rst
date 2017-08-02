@@ -3,13 +3,17 @@ data_inbox
 ==========
 
 
-Add a short description here!
+data_inbox is a tool designed to check the headers of incoming .csv files and
+report on any changes over time.
+
+
+Getting started
+===============
 
 
 Description
 ===========
 
-A longer description of your project goes here...
 
 
 Note
