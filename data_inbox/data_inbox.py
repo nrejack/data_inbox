@@ -50,17 +50,7 @@ def main(verbose, nocreate, buildfileset):
 
     # set up tables
     if not nocreate:
-        create_sql = input("Do you wish to create the needed SQL tables? (y/n)")
-        if create_sql.upper() == 'Y':
-            logger.info("Creating necessary tables.")
-            try:
-                fileset_db.create_empty_tables(conn)
-            except sqlite3.OperationalError:
-                logger.error("Error: table already exists.")
-        else:
-            logger.info("Skipping table creation.")
-        commit_tran(conn, logger)
-
+        setup_tables(conn, logger)
 
     # read data into table
     if not nocreate:
@@ -87,12 +77,18 @@ def main(verbose, nocreate, buildfileset):
     # check partner dirs for files
     check_partner_dirs(partner_info, conn, logger, current_run_id)
 
-    # report on results
-    run_report(conn, logger, current_run_id, partner_info)
+    # report on partner results
+    report = run_partner_report(conn, logger, current_run_id, partner_info)
+
+    print("*****************")
+    print(report)
+    print("*****************")
 
     # check partner files for headers
-    # TODO move this back to before run_report
     check_partner_files(partner_info, conn, logger, current_run_id)
+
+    # run file report
+    run_file_report(conn, logger, current_run_id, partner_info)
 
     commit_tran(conn, logger)
     logger.info("Closing {}".format(FILESET_DATABASE))
@@ -136,9 +132,15 @@ def read_in_sql_files(sql_file, logger, conn):
         logger.info("Skipping reading in data.")
     commit_tran(conn, logger)
 
-def run_report(conn, logger, current_run_id, partner_info):
+def run_partner_report(conn, logger, current_run_id, partner_info):
     """Report status of current run."""
+    output_report = ""
     logger.debug("Current run status")
+    output_report += "OneFlorida Data Trust partner file check for " + str(datetime.datetime.now()) + "\n\n\n"
+    no_new_data = "No new data\n--------------------\n"
+    dir_not_found = "Directory not found\n--------------------\n"
+    new_files = "New files\n--------------------\n"
+
     #logger.debug(partner_info)
     report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=?", \
         (int(current_run_id),))
@@ -148,14 +150,40 @@ def run_report(conn, logger, current_run_id, partner_info):
         partner_name = partner_info[row['partner']]['name_full']
         partner_directory = partner_info[row['partner']]['file_directory']
         if row['code'] == 1:
-            logger.info("Partner {} has no new data in the current run {}"\
-                        .format(partner_name, current_run_id))
+            message = "Partner {} has no new data in the current run {}\n"\
+                        .format(partner_name, current_run_id)
+            logger.info(message)
+            no_new_data += partner_name + "\n"
+
         if row['code'] == 2:
-            logger.info("Partner {} directory {} not found in the current run {}\
-                ".format(partner_name, partner_directory, current_run_id))
+            message = "Partner {} directory {} not found in the current run {}\n\
+                ".format(partner_name, partner_directory, current_run_id)
+            logger.info(message)
+            dir_not_found += partner_name + "\n"
+
         if row['code'] == 3:
-            logger.info("Partner {} has new files in the current run {}" \
-                .format(partner_name, current_run_id))
+            message = "Partner {} has new files in the current run {}\n" \
+                .format(partner_name, current_run_id)
+            logger.info(message)
+            new_files += partner_name + "\n"
+
+    output_report += no_new_data + "\n" + dir_not_found + "\n" + new_files + "\n"
+    return output_report
+
+def run_file_report(conn, logger, current_run_id, partner_info):
+    pass
+
+def setup_tables(conn, logger):
+    create_sql = input("Do you wish to create the needed SQL tables? (y/n)")
+    if create_sql.upper() == 'Y':
+        logger.info("Creating necessary tables.")
+        try:
+            fileset_db.create_empty_tables(conn)
+        except sqlite3.OperationalError:
+            logger.error("Error: table already exists.")
+    else:
+        logger.info("Skipping table creation.")
+    commit_tran(conn, logger)
 
 def check_partner_dirs(partner_info, conn, logger, current_run_id):
     """Iterate over partners and check to see if there are files."""
@@ -217,12 +245,23 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 filename = row['filename_pattern'].split('.')[0]
                 # current filename check
                 new_file_trim = new_file.split('.')[0]
+                # default is no match
+                status = 5
                 # ignore case in comparison
                 if new_file_trim.upper() == filename.upper():
                     logger.info("Match found: {}".format(filename))
-                    check_header(new_file, partner_directory, row['header'], logger)
-                else:
+                    status = check_header(new_file, partner_directory, row['header'], logger)[0]
+                if status == 1:
+                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (1, pid, current_run_id, filename, "unknown"))
+                elif status == 2:
+                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (2, pid, current_run_id, filename, "unknown"))
+                elif status == 3:
+                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (3, pid, current_run_id, filename, "unknown"))
+                elif status == 4:
+                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (4, pid, current_run_id, filename, "unknown"))
+                elif status == 5:
                     logger.info("match not found for {} {}".format(new_file_trim, filename))
+                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, filename, "unknown"))
 
 def load_previous_fileset(conn, pid, logger, name_full):
     """Load previous fileset for a specified (pid) partner."""
@@ -346,14 +385,28 @@ def check_header(new_file, partner_directory, prev_header, logger):
         prev_header = prev_header.split(",")
         logger.debug(header_cols)
         logger.debug(prev_header)
+        starting_new_header_len = len(header_cols)
         # iterate over old header, deleting any cols in new header that match
         for old_col in prev_header:
             logger.debug("Column header match: {}".format(old_col))
-            header_cols.remove(old_col)
-
+            try:
+                header_cols.remove(old_col)
+            except ValueError:
+                logger.info("Old column {} has been deleted.".format(old_col))
+                return [3]
         logger.debug("After matching columns: {}".format(len(header_cols)))
         if len(header_cols) == 0:
             logger.info("{} header matches old header. No change in header.".format(new_file))
+            return [1]
+        elif len(header_cols) == starting_new_header_len:
+            # if the length hasn't changed, assume header is missing in file
+            logger.info("No columns from new header match old header.".format(new_file))
+            logger.info("Header may haven been deleted.")
+            return [4]
+        else:
+            logger.info("{} header does not match old header.".format(new_file))
+            logger.info("New column(s) found: {}".format(header_cols))
+            return [2, header_cols]
 
 def dict_factory(cursor, row):
     """Helper function to return dictionary."""
@@ -382,6 +435,7 @@ def configure_logging(verbose):
         ch.setLevel(logging.WARNING)
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+
     return logger
 
 
