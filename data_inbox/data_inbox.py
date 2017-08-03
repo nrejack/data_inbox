@@ -80,15 +80,15 @@ def main(verbose, nocreate, buildfileset):
     # report on partner results
     report = run_partner_report(conn, logger, current_run_id, partner_info)
 
-    print("*****************")
-    print(report)
-    print("*****************")
-
     # check partner files for headers
     check_partner_files(partner_info, conn, logger, current_run_id)
 
     # run file report
-    run_file_report(conn, logger, current_run_id, partner_info)
+    report += run_file_report(conn, logger, current_run_id, partner_info)
+
+    print("*****************")
+    print(report)
+    print("*****************")
 
     commit_tran(conn, logger)
     logger.info("Closing {}".format(FILESET_DATABASE))
@@ -136,7 +136,7 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     """Report status of current run."""
     output_report = ""
     logger.debug("Current run status")
-    output_report += "OneFlorida Data Trust partner file check for " + str(datetime.datetime.now()) + "\n\n\n"
+    output_report += "OneFlorida Data Trust partner file check for " + str(datetime.datetime.now()) + "\n\n\nPartner-level summaries\n-----------------------\n\n"
     no_new_data = "No new data\n--------------------\n"
     dir_not_found = "Directory not found\n--------------------\n"
     new_files = "New files\n--------------------\n"
@@ -171,7 +171,40 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     return output_report
 
 def run_file_report(conn, logger, current_run_id, partner_info):
-    pass
+    report = "\n\n\nDetailed report\n--------------------\n\n"
+    # first get list of partners we need to report on
+    partner_list = conn.execute("SELECT partner FROM partner_run_status WHERE code = 3 AND run_id = ?", (str(current_run_id),))
+    # next, get the file error codes
+    for partner in partner_list:
+        # get the partner name\
+        partner_code = partner['partner']
+        partner_name = conn.execute("SELECT name_full from partners where id = ?", (partner['partner'],)).fetchone()
+        file_list = conn.execute("SELECT code, partner, run_id, filename_pattern FROM file_run_status WHERE run_id = ? AND partner = ?", (int(current_run_id), partner_code))
+        do_once = True
+        for item in file_list:
+            while do_once:
+                report += partner_name['name_full'] +"\n"
+                report += "-----------------------\n"
+                do_once = False
+            logger.debug("Partner {} {} ".format(partner_code, partner_name))
+            logger.debug(item)
+            if item['code'] == 1:
+                report += "{} has no change in header. OK to process.\n".format(item['filename_pattern'])
+            elif item['code'] == 2:
+                # TODO: store new column names and print them here
+                report += "{} has a new column. Check before processing.\n".format(item['filename_pattern'])
+            elif item['code'] == 3:
+                # TODO: store deleted column name and print it here
+                report += "{} is missing a previously existing column. Check before processing.\n".format(item['filename_pattern'])
+            elif item['code'] == 4:
+                report += "{} may be missing a header. No previous column names matched. Check before processing.\n".format(item['filename_pattern'])
+            elif item['code'] == 5:
+                report += "{} is a new or unidentified filetype. Update fileset_db to match.\n".format(item['filename_pattern'])
+        do_once = True
+        while do_once:
+            report += "\n"
+            do_once = False
+    return report
 
 def setup_tables(conn, logger):
     create_sql = input("Do you wish to create the needed SQL tables? (y/n)")
@@ -369,7 +402,7 @@ def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
         delete_tran = conn.execute("DELETE FROM partners_filesets WHERE pid = ? AND filetype = ?", (partner, filetype_id))
         commit_tran(conn, logger)
     else:
-        logger.info("No existing filetype record found for partner  {} and filetype {}".format(partner, filetype_id))
+        logger.info("No existing filetype record found for partner {} and filetype {}".format(partner, filetype_id))
     logger.info("Adding new filetype record.")
     result = conn.execute("INSERT INTO partners_filesets (pid, date, filename_pattern, filetype, header) VALUES (?, ?, ?, ?, ?)", (int(partner), date_now, new_file, filetype_id, header))
     commit_tran(conn, logger)
