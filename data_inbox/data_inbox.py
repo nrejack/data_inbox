@@ -25,6 +25,10 @@ FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
 # set the minimum match ratio for fuzzy matching
 MATCH_RATIO = 80
 
+FROM_EMAILS = 'please-do-not-reply@ufl.edu'
+TO_EMAILS = 'nrejack@ufl.edu'
+MAIL_SERVER = 'smtp.ufl.edu'
+
 @click.option('-v', '--verbose', help='Run in verbose mode.', \
     is_flag=True, default=False)
 @click.option('-n', '--nocreate', help='Don\'t prompt for creation of tables \
@@ -86,6 +90,7 @@ def main(verbose, nocreate, buildfileset):
     # run file report
     report += run_file_report(conn, logger, current_run_id, partner_info)
 
+    #send_report(report, FROM_EMAILS, TO_EMAILS, MAIL_SERVER)
     print("*****************")
     print(report)
     print("*****************")
@@ -139,7 +144,7 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     output_report += "OneFlorida Data Trust partner file check for " + str(datetime.datetime.now()) + "\n\n\nPartner-level summaries\n-----------------------\n\n"
     no_new_data = "No new data\n--------------------\n"
     dir_not_found = "Directory not found\n--------------------\n"
-    new_files = "New files\n--------------------\n"
+    new_files = "New data\n--------------------\n"
 
     #logger.debug(partner_info)
     report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=?", \
@@ -199,7 +204,7 @@ def run_file_report(conn, logger, current_run_id, partner_info):
             elif item['code'] == 4:
                 report += "{} may be missing a header. No previous column names matched. Check before processing.\n".format(item['filename_pattern'])
             elif item['code'] == 5:
-                report += "{} is a new or unidentified filetype. Update fileset_db to match.\n".format(item['filename_pattern'])
+                report += "{} is a new or unidentified filetype. Update partners_filesets to match.\n".format(item['filename_pattern'])
         do_once = True
         while do_once:
             report += "\n"
@@ -242,7 +247,6 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
                 (error_code, partner['id'], current_run_id))
 
 def check_partner_files(partner_info, conn, logger, current_run_id):
-    # TODO refactor this to avoid the duplication in the reporting function
     """Iterate over files for each partner to check their headers."""
     logger.debug("Checking partner files")
     partners_to_check = []
@@ -278,23 +282,25 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 filename = row['filename_pattern'].split('.')[0]
                 # current filename check
                 new_file_trim = new_file.split('.')[0]
-                # default is no match
-                status = 5
                 # ignore case in comparison
-                if new_file_trim.upper() == filename.upper():
+                if (new_file_trim.upper() == filename.upper()) or (new_file_trim.upper() in filename.upper()):
                     logger.info("Match found: {}".format(filename))
                     status = check_header(new_file, partner_directory, row['header'], logger)[0]
-                if status == 1:
-                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (1, pid, current_run_id, filename, "unknown"))
-                elif status == 2:
-                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (2, pid, current_run_id, filename, "unknown"))
-                elif status == 3:
-                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (3, pid, current_run_id, filename, "unknown"))
-                elif status == 4:
-                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (4, pid, current_run_id, filename, "unknown"))
-                elif status == 5:
-                    logger.info("match not found for {} {}".format(new_file_trim, filename))
-                    result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, filename, "unknown"))
+                    if status == 1:
+                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (1, pid, current_run_id, filename, "unknown"))
+                        break
+                    elif status == 2:
+                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (2, pid, current_run_id, filename, "unknown"))
+                        break
+                    elif status == 3:
+                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (3, pid, current_run_id, filename, "unknown"))
+                        break
+                    elif status == 4:
+                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (4, pid, current_run_id, filename, "unknown"))
+                        break
+        # if we didn't exit, we didn't match
+        logger.info("match not found for {} {}".format(new_file_trim, filename))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, filename, "unknown"))
 
 def load_previous_fileset(conn, pid, logger, name_full):
     """Load previous fileset for a specified (pid) partner."""
@@ -481,7 +487,7 @@ def send_report(report, from_address, to_address, mail_server):
     """
     msg = MIMEText(report)
     msg['Subject'] = \
-        "data_inbox report for " + str(datetime.now()) + "\n"
+        "data_inbox report for " + str(datetime.datetime.now()) + "\n"
     msg['From'] = from_address
     msg['To'] = to_address
     mail_connection = smtplib.SMTP(mail_server)
