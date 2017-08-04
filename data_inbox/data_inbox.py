@@ -32,12 +32,12 @@ MAIL_SERVER = 'smtp.ufl.edu'
 
 @click.option('-v', '--verbose', help='Run in verbose mode.', \
     is_flag=True, default=False)
-@click.option('-n', '--nocreate', help='Don\'t prompt for creation of tables \
+@click.option('-c', '--create', help='Prompt for creation of tables \
     and loading data.', is_flag=True, default=False)
 @click.option('-b', '--buildfileset', help='Build fileset for partner.', \
     is_flag=True, default=False)
 @click.command()
-def main(verbose, nocreate, buildfileset):
+def main(verbose, create, buildfileset):
     """main function for data_inbox."""
     logger = configure_logging(verbose)
 
@@ -54,11 +54,11 @@ def main(verbose, nocreate, buildfileset):
     c = conn.cursor()
 
     # set up tables
-    if not nocreate:
+    if create:
         setup_tables(conn, logger)
 
     # read data into table
-    if not nocreate:
+    if create:
         for sql_file in [PARTNER_DATA_FILE, PARTNER_ERROR_CODES_DATA_FILE, \
                         FILE_ERROR_CODES_DATA_FILE, FILETYPES_DATA_FILE]:
             read_in_sql_files(sql_file, logger, conn)
@@ -89,7 +89,7 @@ def main(verbose, nocreate, buildfileset):
     check_partner_files(partner_info, conn, logger, current_run_id)
 
     # run file report
-    report += run_file_report(conn, logger, current_run_id, partner_info)
+    #report += run_file_report(conn, logger, current_run_id, partner_info)
 
     send_report(report, FROM_EMAILS, TO_EMAILS, MAIL_SERVER)
     print("*****************")
