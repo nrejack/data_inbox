@@ -5,4 +5,5 @@ VALUES
   (2, 'New column'),
   (3, 'Column deleted'),
   (4, 'Header missing'),
-  (5, 'New filename pattern');
+  (5, 'New filename pattern'),
+  (6, 'Column(s) deleted and column(s) added');

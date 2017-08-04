@@ -63,6 +63,8 @@ def create_empty_tables(conn):
         run_id INTEGER,
         filename_pattern TEXT,
         filetype INTEGER,
+        cols_add TEXT,
+        cols_del TEXT,
         FOREIGN KEY (code) REFERENCES file_error_codes(id),
         FOREIGN KEY (partner) REFERENCES partners(id),
         FOREIGN KEY (run_id) REFERENCES current_run_status(id),

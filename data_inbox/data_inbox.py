@@ -26,6 +26,7 @@ FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
 MATCH_RATIO = 80
 
 FROM_EMAILS = 'please-do-not-reply@ufl.edu'
+#TO_EMAILS = 'atloiaco@ufl.edu'
 TO_EMAILS = 'nrejack@ufl.edu'
 MAIL_SERVER = 'smtp.ufl.edu'
 
@@ -90,7 +91,7 @@ def main(verbose, nocreate, buildfileset):
     # run file report
     report += run_file_report(conn, logger, current_run_id, partner_info)
 
-    #send_report(report, FROM_EMAILS, TO_EMAILS, MAIL_SERVER)
+    send_report(report, FROM_EMAILS, TO_EMAILS, MAIL_SERVER)
     print("*****************")
     print(report)
     print("*****************")
@@ -184,7 +185,7 @@ def run_file_report(conn, logger, current_run_id, partner_info):
         # get the partner name\
         partner_code = partner['partner']
         partner_name = conn.execute("SELECT name_full from partners where id = ?", (partner['partner'],)).fetchone()
-        file_list = conn.execute("SELECT code, partner, run_id, filename_pattern FROM file_run_status WHERE run_id = ? AND partner = ?", (int(current_run_id), partner_code))
+        file_list = conn.execute("SELECT code, partner, run_id, filename_pattern, cols_add, cols_del FROM file_run_status WHERE run_id = ? AND partner = ?", (int(current_run_id), partner_code))
         do_once = True
         for item in file_list:
             while do_once:
@@ -196,15 +197,16 @@ def run_file_report(conn, logger, current_run_id, partner_info):
             if item['code'] == 1:
                 report += "{} has no change in header. OK to process.\n".format(item['filename_pattern'])
             elif item['code'] == 2:
-                # TODO: store new column names and print them here
-                report += "{} has a new column. Check before processing.\n".format(item['filename_pattern'])
+                report += "{} has a new column {}. Check before processing.\n".format(item['filename_pattern'], item['cols_add'])
             elif item['code'] == 3:
                 # TODO: store deleted column name and print it here
-                report += "{} is missing a previously existing column. Check before processing.\n".format(item['filename_pattern'])
+                report += "{} is missing previously existing column(s) {}. Check before processing.\n".format(item['filename_pattern'], item['cols_del'])
             elif item['code'] == 4:
                 report += "{} may be missing a header. No previous column names matched. Check before processing.\n".format(item['filename_pattern'])
             elif item['code'] == 5:
                 report += "{} is a new or unidentified filetype. Update partners_filesets to match.\n".format(item['filename_pattern'])
+            elif item['code'] == 6:
+                report += "{} has missing columns {} and new columns {}. Check before processing.\n".format(item['filename_pattern'], item['cols_del'], item['cols_add'])
         do_once = True
         while do_once:
             report += "\n"
@@ -245,10 +247,8 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
             conn.execute('INSERT INTO partner_run_status \
                 (code, partner, run_id) VALUES (?, ?, ?)', \
                 (error_code, partner['id'], current_run_id))
-
-def check_partner_files(partner_info, conn, logger, current_run_id):
-    """Iterate over files for each partner to check their headers."""
-    logger.debug("Checking partner files")
+def make_partners_to_check_list(partner_info, conn, logger, current_run_id):
+    """Generate list of partners to check"""
     partners_to_check = []
     report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=?", (int(current_run_id),))
     for row in report:
@@ -262,45 +262,75 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
             pass # directory not found
         if row['code'] == 3:
             logger.info("Adding partner {} to the list to check".format(partner_name))
-            partners_to_check.append({'id':partner_id, 'name_full':partner_name})
+            partners_to_check.append({'id':partner_id, 'name_full':partner_name, 'dir':partner_directory})
+    return partners_to_check
 
-    # TODO make new function here
+def check_partner_files(partner_info, conn, logger, current_run_id):
+    """Iterate over files for each partner to check their headers."""
+    logger.debug("Checking partner files")
+    partners_to_check = make_partners_to_check_list(partner_info, conn, logger, current_run_id)
     # now check the list
     for partner in partners_to_check:
         name_full = partner['name_full']
         pid = partner['id']
+        directory = partner['dir']
         logger.info("Now checking {} ".format(name_full))
         # load the previous fileset info
-        partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
-        new_fileset = os.listdir(partner_directory)
+        #partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
+        new_fileset = os.listdir(directory)
         for new_file in new_fileset:
-            logger.debug("Now checking file {}".format(new_file))
+            partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
+            logger.debug("partner_fileset len: {}".format(len(partner_fileset)))
+            #logger.debug(partner_fileset)
+            logger.info("Now checking new file {}".format(new_file))
             # find a match
             # search the fileset to find a matching filename
             for row in partner_fileset:
                 # previous filename
-                filename = row['filename_pattern'].split('.')[0]
+                filename = row['filename_pattern']
                 # current filename check
+                #logger.debug(filename)
                 new_file_trim = new_file.split('.')[0]
                 # ignore case in comparison
                 if (new_file_trim.upper() == filename.upper()) or (new_file_trim.upper() in filename.upper()):
                     logger.info("Match found: {}".format(filename))
-                    status = check_header(new_file, partner_directory, row['header'], logger)[0]
+                    status_and_cols = check_header(new_file, directory, row['header'], logger)
+                    status = status_and_cols[0]
+                    if len(status_and_cols) == 2:
+                        cols = status_and_cols[1]
+                    elif len(status_and_cols) == 3:
+                        cols_add = status_and_cols[1]
+                        cols_del = status_and_cols[2]
+
                     if status == 1:
+                        logger.info("Storing exact match status for {}".format(new_file))
                         result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (1, pid, current_run_id, filename, "unknown"))
                         break
                     elif status == 2:
-                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (2, pid, current_run_id, filename, "unknown"))
+                        logger.info("Storing new column status for {}".format(new_file))
+                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_add) VALUES (?, ?, ?, ?, ?, ?)", (2, pid, current_run_id, filename, "unknown", str(cols)))
                         break
                     elif status == 3:
-                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (3, pid, current_run_id, filename, "unknown"))
+                        logger.info("Storing deleted column status for {}".format(new_file))
+                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_del) VALUES (?, ?, ?, ?, ?, ?)", (3, pid, current_run_id, filename, "unknown", str(cols)))
                         break
                     elif status == 4:
+                        logger.info("Storing missing header status for {}".format(new_file))
                         result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (4, pid, current_run_id, filename, "unknown"))
                         break
-        # if we didn't exit, we didn't match
-        logger.info("match not found for {} {}".format(new_file_trim, filename))
-        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, filename, "unknown"))
+                    elif status == 6:
+                        logger.info("Storing missing and added col status status for {}".format(new_file))
+                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_add, cols_del) VALUES (?, ?, ?, ?, ?, ?, ?)", (6, pid, current_run_id, filename, "unknown"), cols_add, cols_del)
+                    else:
+                        logger.info("something went wrong. status {}".format(status))
+                # if we didn't exit, we didn't match
+                else:
+                    logger.info("new file: {} does not match old file: {}".format(new_file_trim, filename))
+                    if len(partner_fileset) != 0:
+                        logger.info("Continuing to attempt to match {}".format(new_file_trim))
+                    elif len(partner_fileset) == 0:
+                        logger.info("new file: {} has no match".format(new_file_trim))
+                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, filename, "unknown"))
 
 def load_previous_fileset(conn, pid, logger, name_full):
     """Load previous fileset for a specified (pid) partner."""
@@ -410,38 +440,50 @@ def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
     else:
         logger.info("No existing filetype record found for partner {} and filetype {}".format(partner, filetype_id))
     logger.info("Adding new filetype record.")
-    result = conn.execute("INSERT INTO partners_filesets (pid, date, filename_pattern, filetype, header) VALUES (?, ?, ?, ?, ?)", (int(partner), date_now, new_file, filetype_id, header))
+    result = conn.execute("INSERT INTO partners_filesets (pid, date, filename_pattern, filetype, header) VALUES (?, ?, ?, ?, ?)", (int(partner), date_now, new_file, filetype_id, header.strip()))
     commit_tran(conn, logger)
     #logger.warning("add_to_filetype_dict not yet implemented. NOOP")
 
 def check_header(new_file, partner_directory, prev_header, logger):
     """Check new file header against previous header."""
     # TODO: make this work on non-exact matching
+    logger.info("Now checking header for {}".format(new_file))
     with open(partner_directory + new_file, 'r') as f:
         header_row = f.readline().strip()
         logger.debug("Header for file {}:\n{}".format(new_file, header_row.strip()))
         header_cols = header_row.split(",")
         prev_header = prev_header.split(",")
-        logger.debug(header_cols)
-        logger.debug(prev_header)
+        missing_header_cols = []
+        #logger.debug(header_cols)
+        #logger.debug(prev_header)
         starting_new_header_len = len(header_cols)
         # iterate over old header, deleting any cols in new header that match
         for old_col in prev_header:
-            logger.debug("Column header match: {}".format(old_col))
+            logger.debug("Column header trying to match: {}".format(old_col))
             try:
                 header_cols.remove(old_col)
+                logger.debug("Removed old column {}".format(old_col))
             except ValueError:
-                logger.info("Old column {} has been deleted.".format(old_col))
-                return [3]
+                deleted_columns = True
+                logger.info("Old column {} is missing.".format(old_col))
+                missing_header_cols.append(old_col)
         logger.debug("After matching columns: {}".format(len(header_cols)))
-        if len(header_cols) == 0:
-            logger.info("{} header matches old header. No change in header.".format(new_file))
+        if len(header_cols) == 0 and not missing_header_cols:
+            logger.info("{} header exactly matches old header. No change in header.".format(new_file))
             return [1]
         elif len(header_cols) == starting_new_header_len:
             # if the length hasn't changed, assume header is missing in file
             logger.info("No columns from new header match old header.".format(new_file))
             logger.info("Header may haven been deleted.")
             return [4]
+        elif len(header_cols) != starting_new_header_len and missing_header_cols:
+            # at least some columns matched
+            logger.info("Columns deleted.")
+            return [3, missing_header_cols]
+        elif len(header_cols) != 0 and missing_header_cols:
+            # columns added and deleted
+            logger.info("Columns added and deleted")
+            return [6, header_cols, missing_header_cols]
         else:
             logger.info("{} header does not match old header.".format(new_file))
             logger.info("New column(s) found: {}".format(header_cols))
