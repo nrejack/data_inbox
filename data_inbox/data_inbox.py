@@ -4,6 +4,8 @@
 data_inbox: data quality checker
 """
 
+# TODO!!: Add database abstraction layer
+
 import logging
 import sqlite3
 import shutil
@@ -295,15 +297,21 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
         new_fileset = os.listdir(directory)
         for new_file in new_fileset:
             partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
+            if not partner_fileset:
+                # TODO FIX BELOW- NOT WORKING
+                conn.execute('INSERT INTO partner_run_status (code, partner, run_id) VALUES (?, ?, ?)', (4, pid, current_run_id))
+                commit_tran(conn, logger)
+                return
             logger.debug("partner_fileset len: {}".format(len(partner_fileset)))
             #logger.debug(partner_fileset)
             logger.info("Now checking new file {}".format(new_file))
             # find a match
             # search the fileset to find a matching filename
+            max_score = {'score': 0, 'filename': ""}
             for row in partner_fileset:
                 # previous filename
                 filename = row['filename_pattern']
-                logger.debug("CURRENT FILENAME: {}".format(filename))
+                logger.debug("Current filename: {}".format(filename))
                 # current filename check
                 #logger.debug(filename)
                 new_file_trim = new_file.split('.')[0]
@@ -313,48 +321,58 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 # get rid of numbers in the strings
                 filename_upper = filename.upper()
                 fname = filename_upper.translate({ord(k): None for k in digits})
+                current_score = fuzz.ratio(new, fname)
+                if current_score > max_score['score']:
+                    max_score['score'] = current_score
+                    max_score['filename'] = filename
+                    max_score['header'] = row['header']
+                logger.info("Continuing to attempt to match {}".format(new_file_trim))
+                #if new == fname or new in fname \
+                #    or fuzz.ratio(new, fname) > MATCH_RATIO or new.find(fname) != -1:
+                logger.debug(max_score)
 
-                if new == fname or new in fname \
-                    or fuzz.ratio(new, fname) > MATCH_RATIO or new.find(fname) != -1:
+            if max_score['score'] == 0:
+                logger.info("new file: {} has no match".format(new_file_trim))
+                result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, filename, "unknown"))
+            else:
+                filename = max_score['filename']
+                cols = ""
+                cols_add = ""
+                cols_del = ""
+                logger.info("Match found: {}".format(filename))
+                status_and_cols = check_header(new_file, directory, max_score['header'], logger)
+                status = status_and_cols[0]
+                if len(status_and_cols) == 2:
+                    cols = status_and_cols[1]
+                elif len(status_and_cols) == 3:
+                    cols_add = status_and_cols[1]
+                    cols_del = status_and_cols[2]
+                get_status(status, pid, current_run_id, new_file, cols, cols_add, cols_del, conn, logger)
 
-                    logger.info("Match found: {}".format(filename))
-                    status_and_cols = check_header(new_file, directory, row['header'], logger)
-                    status = status_and_cols[0]
-                    if len(status_and_cols) == 2:
-                        cols = status_and_cols[1]
-                    elif len(status_and_cols) == 3:
-                        cols_add = status_and_cols[1]
-                        cols_del = status_and_cols[2]
 
-                    if status == 1:
-                        logger.info("Storing exact match status for {}".format(new_file))
-                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (1, pid, current_run_id, new_file, "unknown"))
-                        break
-                    elif status == 2:
-                        logger.info("Storing new column status for {}".format(new_file))
-                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_add) VALUES (?, ?, ?, ?, ?, ?)", (2, pid, current_run_id, new_file, "unknown", str(cols)))
-                        break
-                    elif status == 3:
-                        logger.info("Storing deleted column status for {}".format(new_file))
-                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_del) VALUES (?, ?, ?, ?, ?, ?)", (3, pid, current_run_id, new_file, "unknown", str(cols)))
-                        break
-                    elif status == 4:
-                        logger.info("Storing missing header status for {}".format(new_file))
-                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (4, pid, current_run_id, new_file, "unknown"))
-                        break
-                    elif status == 6:
-                        logger.info("Storing missing and added col status status for {}".format(new_file))
-                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_add, cols_del) VALUES (?, ?, ?, ?, ?, ?, ?)", (6, pid, current_run_id, new_file, "unknown"), cols_add, cols_del)
-                    else:
-                        logger.info("something went wrong. status {}".format(status))
-                # if we didn't exit, we didn't match
-                else:
-                    logger.info("new file: {} does not match old file: {}".format(new_file_trim, filename))
-                    if len(partner_fileset) != 0:
-                        logger.info("Continuing to attempt to match {}".format(new_file_trim))
-                    elif len(partner_fileset) == 0:
-                        logger.info("new file: {} has no match".format(new_file_trim))
-                        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, filename, "unknown"))
+def get_status(status, pid, current_run_id, new_file, cols, cols_add, cols_del, conn, logger):
+    """Given a status code, insert a row recording the file_run_status and log it."""
+    if status == 1:
+        logger.info("Storing exact match status for {}".format(new_file))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (1, pid, current_run_id, new_file, "unknown"))
+        return
+    elif status == 2:
+        logger.info("Storing new column status for {}".format(new_file))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_add) VALUES (?, ?, ?, ?, ?, ?)", (2, pid, current_run_id, new_file, "unknown", str(cols)))
+        return
+    elif status == 3:
+        logger.info("Storing deleted column status for {}".format(new_file))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_del) VALUES (?, ?, ?, ?, ?, ?)", (3, pid, current_run_id, new_file, "unknown", str(cols)))
+        return
+    elif status == 4:
+        logger.info("Storing missing header status for {}".format(new_file))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (4, pid, current_run_id, new_file, "unknown"))
+        return
+    elif status == 6:
+        logger.info("Storing missing and added col status status for {}".format(new_file))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_add, cols_del) VALUES (?, ?, ?, ?, ?, ?, ?)", (6, pid, current_run_id, new_file, "unknown"), cols_add, cols_del)
+    else:
+        logger.info("something went wrong. status {}".format(status))
 
 def load_previous_fileset(conn, pid, logger, name_full):
     """Load previous fileset for a specified (pid) partner."""
@@ -375,6 +393,7 @@ def load_previous_fileset(conn, pid, logger, name_full):
     if len(partner_fileset) == 0:
         logger.warning("No previous recorded fileset stored for {}".format(name_full))
         logger.fatal('{} will not be checked in this run.'.format(name_full))
+        return
     #else:
         #logger.debug(partner_fileset)
     return partner_fileset
