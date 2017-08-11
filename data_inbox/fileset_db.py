@@ -19,7 +19,9 @@ def create_empty_tables(conn):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         name_full TEXT,
-        file_directory TEXT
+        incoming_file_directory TEXT,
+        stored_file_directory TEXT,
+        tocheck TEXT
         )
         """,
 
