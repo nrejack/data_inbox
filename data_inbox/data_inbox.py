@@ -422,8 +422,12 @@ def add_new_fileset(conn, logger):
             logger.info("File directory empty for {}. Skipping building fileset.".format(name))
         else:
             logger.info("Now building fileset for {}".format(name))
+            # iterate over newest first
+            list_of_dirs = sorted(list_of_dirs, reverse=True)
+            list_of_dirs_count = len(list_of_dirs)
             for new_dir in list_of_dirs:
-                get_out = input("There are {} remaining directories to scan for {}. Do you wish to continue? (Y/N)".format(str(len(list_of_dirs)), name))
+                get_out = input("There are {} remaining directories to scan for {}. Do you wish to continue? (Y/N)".format(str(list_of_dirs_count), name))
+                list_of_dirs_count = list_of_dirs_count - 1
                 if 'N' == get_out or 'n' == get_out:
                     break
                 new_dir = directory + new_dir
