@@ -149,9 +149,15 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     logger.debug("Current run status")
     output_report += "OneFlorida Data Trust partner file check for " + str(datetime.datetime.now()) + "\n\n\nPartner-level summaries\n-----------------------\n\n"
     no_new_data = "No new data\n--------------------\n"
+    no_new_data_initial_len = len(no_new_data)
     dir_not_found = "Directory not found\n--------------------\n"
+    dir_not_found_initial_len = len(dir_not_found)
     new_files = "New data\n--------------------\n"
+    new_files_initial_len = len(new_files)
     not_checked = "Not checked\n--------------------\n"
+    not_checked_initial_len = len(not_checked)
+    no_fileset = "No previous fileset stored\n--------------------\n"
+    no_fileset_initial_len = len(no_fileset)
 
     #logger.debug(partner_info)
     report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=?", \
@@ -185,7 +191,27 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
             logger.info(message)
             not_checked += partner_name + "\n"
 
-    output_report += no_new_data + "\n" + dir_not_found + "\n" + new_files + "\n" + not_checked + "\n"
+        if row['code'] == 5:
+            message = "Partner {} has no previous fileset stored. Add historical data. {}\n" \
+                .format(partner_name, current_run_id)
+            logger.info(message)
+            no_fileset += partner_name + "\n"
+
+    if len(no_new_data) > no_new_data_initial_len:
+        output_report += no_new_data + "\n"
+
+    if len(dir_not_found) > dir_not_found_initial_len:
+        output_report += dir_not_found + "\n"
+
+    if len(new_files) > new_files_initial_len:
+        output_report += new_files + "\n"
+
+    if len(not_checked) > not_checked_initial_len:
+        output_report += not_checked + "\n"
+
+    if len(no_fileset) > no_fileset_initial_len:
+        output_report += no_fileset + "\n"
+        
     return output_report
 
 def run_file_report(conn, logger, current_run_id, partner_info):
@@ -300,7 +326,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
             partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
             if not partner_fileset:
                 # TODO FIX BELOW- NOT WORKING
-                conn.execute('INSERT INTO partner_run_status (code, partner, run_id) VALUES (?, ?, ?)', (4, pid, current_run_id))
+                conn.execute('INSERT INTO partner_run_status (code, partner, run_id) VALUES (?, ?, ?)', (5, pid, current_run_id))
                 commit_tran(conn, logger)
                 return
             logger.debug("partner_fileset len: {}".format(len(partner_fileset)))
