@@ -25,6 +25,7 @@ FILE_ERROR_CODES_DATA_FILE = 'file_error_codes.sql'
 FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
+FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls']
 # set the minimum match ratio for fuzzy matching
 MATCH_RATIO = 80
 
@@ -39,6 +40,8 @@ MAIL_SERVER = 'smtp.ufl.edu'
     and loading data.', is_flag=True, default=False)
 @click.option('-b', '--buildfileset', help='Build fileset for partner.', \
     is_flag=True, default=False)
+@click.option('-m', '--manual', help='Run in manual mode.', is_flag = True, \
+    default=False)
 @click.command()
 def main(verbose, create, buildfileset):
     """main function for data_inbox."""
@@ -209,7 +212,6 @@ def run_file_report(conn, logger, current_run_id, partner_info):
             elif item['code'] == 2:
                 report += "{} has a new column {}. Check before processing.\n".format(item['filename_pattern'], item['cols_add'])
             elif item['code'] == 3:
-                # TODO: store deleted column name and print it here
                 report += "{} is missing previously existing column(s) {}. Check before processing.\n".format(item['filename_pattern'], item['cols_del'])
             elif item['code'] == 4:
                 report += "{} may be missing a header. No previous column names matched. Check before processing.\n".format(item['filename_pattern'])
@@ -305,6 +307,11 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
             logger.debug("partner_fileset len: {}".format(len(partner_fileset)))
             #logger.debug(partner_fileset)
             logger.info("Now checking new file {}".format(new_file))
+            file_extension = new_file.split('.')[1].lower()
+            logger.debug("File extension: {}".format(file_extension))
+            if file_extension in FILETYPES_TO_SKIP:
+                logger.debug ("Not checking {} because it is in the list of filetypes to skip.".format(new_file))
+                continue
             # find a match
             # search the fileset to find a matching filename
             max_score = {'score': 0, 'filename': ""}
@@ -501,7 +508,7 @@ def split_on_delim(line, delim):
     """Given a string and a delimiter, return the string split on the delimter."""
     return line.split(delim)
 
-def find_delim_and_split(line):
+def find_delim_and_split(line, logger):
     """Given a string, try splitting it until you find the correct delimiter"""
     delim = ','
     line_split = split_on_delim(line, delim)
@@ -523,7 +530,7 @@ def check_header(new_file, partner_directory, prev_header, logger):
         header_row = f.readline().strip()
 
         logger.debug("Header for file {}:\n{}".format(new_file, header_row.strip()))
-        header_cols, delim = find_delim_and_split(header_row)
+        header_cols, delim = find_delim_and_split(header_row, logger)
         logger.debug("DELIMITER: {}".format(delim))
         prev_header = prev_header.split(delim)
         missing_header_cols = []
