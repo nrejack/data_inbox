@@ -25,7 +25,7 @@ FILE_ERROR_CODES_DATA_FILE = 'file_error_codes.sql'
 FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
-FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls']
+FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip']
 # set the minimum match ratio for fuzzy matching
 MATCH_RATIO = 80
 
@@ -67,7 +67,7 @@ def main(verbose, create, buildfileset, manual):
     if create:
         for sql_file in [PARTNER_DATA_FILE, PARTNER_ERROR_CODES_DATA_FILE, \
                         FILE_ERROR_CODES_DATA_FILE, FILETYPES_DATA_FILE]:
-            read_in_sql_files(sql_file, logger, conn)
+            read_in_sql_files(os.path.join('sql', sql_file), logger, conn)
 
     # read list of partners from table
     # TODO: abstract the data access methods
