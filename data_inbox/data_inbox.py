@@ -156,8 +156,6 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     new_files_initial_len = len(new_files)
     not_checked = "Not checked\n--------------------\n"
     not_checked_initial_len = len(not_checked)
-    no_fileset = "No previous fileset stored\n--------------------\n"
-    no_fileset_initial_len = len(no_fileset)
 
     #logger.debug(partner_info)
     report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=?", \
@@ -191,12 +189,6 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
             logger.info(message)
             not_checked += partner_name + "\n"
 
-        if row['code'] == 5:
-            message = "Partner {} has no previous fileset stored. Add historical data. {}\n" \
-                .format(partner_name, current_run_id)
-            logger.info(message)
-            no_fileset += partner_name + "\n"
-
     if len(no_new_data) > no_new_data_initial_len:
         output_report += no_new_data + "\n"
 
@@ -209,9 +201,6 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     if len(not_checked) > not_checked_initial_len:
         output_report += not_checked + "\n"
 
-    if len(no_fileset) > no_fileset_initial_len:
-        output_report += no_fileset + "\n"
-        
     return output_report
 
 def run_file_report(conn, logger, current_run_id, partner_info):
@@ -240,10 +229,14 @@ def run_file_report(conn, logger, current_run_id, partner_info):
                 report += "{} is missing previously existing column(s) {}. Check before processing.\n".format(item['filename_pattern'], item['cols_del'])
             elif item['code'] == 4:
                 report += "{} may be missing a header. No previous column names matched. Check before processing.\n".format(item['filename_pattern'])
+            #TODO does this ever get triggered?
             elif item['code'] == 5:
                 report += "{} is a new or unidentified filetype. Update partners_filesets to match.\n".format(item['filename_pattern'])
             elif item['code'] == 6:
                 report += "{} has missing columns {} and new columns {}. Check before processing.\n".format(item['filename_pattern'], item['cols_del'], item['cols_add'])
+            elif item['code'] == 7:
+                report += "No previous fileset stored for partner. Header(s) have not been checked.\n"
+
         do_once = True
         while do_once:
             report += "\n"
@@ -325,8 +318,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
         for new_file in new_fileset:
             partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
             if not partner_fileset:
-                # TODO FIX BELOW- NOT WORKING
-                conn.execute('INSERT INTO partner_run_status (code, partner, run_id) VALUES (?, ?, ?)', (5, pid, current_run_id))
+                conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (7, pid, current_run_id, filename, "unknown"))
                 commit_tran(conn, logger)
                 return
             logger.debug("partner_fileset len: {}".format(len(partner_fileset)))

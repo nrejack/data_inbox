@@ -6,4 +6,5 @@ VALUES
   (3, 'Column deleted'),
   (4, 'Header missing'),
   (5, 'New filename pattern'),
-  (6, 'Column(s) deleted and column(s) added');
+  (6, 'Column(s) deleted and column(s) added'),
+  (7, 'No previous fileset stored- header not checked.')
