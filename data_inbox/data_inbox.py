@@ -43,7 +43,7 @@ MAIL_SERVER = 'smtp.ufl.edu'
 @click.option('-m', '--manual', help='Run in manual mode.', is_flag = True, \
     default=False)
 @click.command()
-def main(verbose, create, buildfileset):
+def main(verbose, create, buildfileset, manual):
     """main function for data_inbox."""
     logger = configure_logging(verbose)
 
@@ -415,19 +415,25 @@ def add_new_fileset(conn, logger):
         name = partner_list[partner]['name']
         directory = partner_list[partner]['stored_file_directory']
         try:
-            list_of_files = os.listdir(directory)
+            list_of_dirs = os.listdir(directory)
         except:
             logger.error("Directory {} not found.".format(directory))
             continue
-        if not list_of_files:
+        if not list_of_dirs:
             logger.info("File directory empty for {}. Skipping building fileset.".format(name))
         else:
             logger.info("Now building fileset for {}".format(name))
-            for new_file in list_of_files:
-                with open(directory + new_file, 'r') as f:
-                    header = f.readline()
-                logger.info("Now trying to add file {} to fileset.".format(new_file))
-                guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
+            for new_dir in list_of_dirs:
+                get_out = input("There are {} remaining directories to scan for {}. Do you wish to continue? (Y/N)".format(str(len(list_of_dirs)), name))
+                if 'N' == get_out or 'n' == get_out:
+                    break
+                new_dir = directory + new_dir
+                list_of_files = os.listdir(new_dir)
+                for new_file in list_of_files:
+                    with open(os.path.join(new_dir, new_file), 'r') as f:
+                        header = f.readline()
+                    logger.info("Now trying to add file {} to fileset.".format(new_file))
+                    guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
 
 def get_filetype_dict(conn, logger):
     """Utility function that gets the dict of filetypes."""
@@ -465,9 +471,9 @@ def guess_filetype(partner, new_file, filetype_dict, header, conn, logger):
     if not file_matched:
         for item in filetype_dict.keys():
             filetype_id = filetype_dict[item]
-            #logger.debug(item)
-            #logger.debug(new_file_upper)
-            #logger.debug(fuzz.ratio(new_file_upper, item))
+            logger.debug(item)
+            logger.debug(new_file_upper)
+            logger.debug(fuzz.ratio(new_file_upper, item))
             if fuzz.ratio(new_file_upper, item) > MATCH_RATIO or new_file_upper.find(item) != -1:
                 logger.info("Partial match found for {}: looks like a {} file".format(new_file, item))
                 add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger)
@@ -476,7 +482,7 @@ def guess_filetype(partner, new_file, filetype_dict, header, conn, logger):
     if not file_matched:
         logger.info("No full match found for {}. Not sure what it is.".format(new_file))
         logger.info("Adding with full filename.")
-        add_to_filetype_dict(partner, 13, new_file, header, conn, logger)
+        add_to_filetype_dict(partner, 31, new_file, header, conn, logger)
 
 def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
     """Function to add a new file to the filetype dictionary."""
@@ -489,12 +495,12 @@ def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
         existing_filetype_row = existing_filetype_row.fetchone()
     except:
         logger.debug("No previous record found.")
-    if existing_filetype_row and int(filetype_id) != 13:
+    if existing_filetype_row and int(filetype_id) != 31:
         logger.info("Existing filetype record found for partner {} and filetype {}".format(partner, filetype_id))
         logger.info("Deleting previous filetype records from partners_filesets")
         delete_tran = conn.execute("DELETE FROM partners_filesets WHERE pid = ? AND filetype = ?", (partner, filetype_id))
         commit_tran(conn, logger)
-    elif existing_filetype_row and int(filetype_id) == 13 and new_file == existing_filetype_row['filename_pattern']:
+    elif existing_filetype_row and int(filetype_id) == 31 and new_file == existing_filetype_row['filename_pattern']:
         logger.info("Matching file of unknown type with same name already added for partner. Skipping.")
         return None
     else:
