@@ -39,7 +39,7 @@ MAIL_SERVER = 'smtp.ufl.edu'
     and loading data.', is_flag=True, default=False)
 @click.option('-b', '--buildfileset', help='Build fileset for partner.', \
     is_flag=True, default=False)
-@click.option('-m', '--manual', help='Run in manual mode.', is_flag = True, \
+@click.option('-m', '--manual', help='Run in manual mode.', is_flag=True, \
     default=False)
 @click.command()
 def main(verbose, create, buildfileset, manual):
@@ -327,7 +327,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
             file_extension = new_file.split('.')[1].lower()
             logger.debug("File extension: {}".format(file_extension))
             if file_extension in FILETYPES_TO_SKIP:
-                logger.debug ("Not checking {} because it is in the list of filetypes to skip.".format(new_file))
+                logger.debug("Not checking {} because it is in the list of filetypes to skip.".format(new_file))
                 continue
             # find a match
             # search the fileset to find a matching filename
@@ -446,7 +446,7 @@ def add_new_fileset(conn, logger):
             for new_dir in list_of_dirs:
                 get_out = input("There are {} remaining directories to scan for {}. Do you wish to continue? (Y/N)".format(str(list_of_dirs_count), name))
                 list_of_dirs_count = list_of_dirs_count - 1
-                if 'N' == get_out or 'n' == get_out:
+                if get_out == 'N' or get_out == 'n':
                     break
                 new_dir = directory + new_dir
                 list_of_files = os.listdir(new_dir)
