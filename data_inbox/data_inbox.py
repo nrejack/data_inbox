@@ -30,8 +30,7 @@ FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip']
 MATCH_RATIO = 80
 
 FROM_EMAILS = 'please-do-not-reply@ufl.edu'
-#TO_EMAILS = 'atloiaco@ufl.edu'
-TO_EMAILS = 'nrejack@ufl.edu'
+TO_EMAILS = ''
 MAIL_SERVER = 'smtp.ufl.edu'
 
 @click.option('-v', '--verbose', help='Run in verbose mode.', \
@@ -471,9 +470,9 @@ def guess_filetype(partner, new_file, filetype_dict, header, conn, logger):
     if not file_matched:
         for item in filetype_dict.keys():
             filetype_id = filetype_dict[item]
-            logger.debug(item)
-            logger.debug(new_file_upper)
-            logger.debug(fuzz.ratio(new_file_upper, item))
+            #logger.debug(item)
+            #logger.debug(new_file_upper)
+            #logger.debug(fuzz.ratio(new_file_upper, item))
             if fuzz.ratio(new_file_upper, item) > MATCH_RATIO or new_file_upper.find(item) != -1:
                 logger.info("Partial match found for {}: looks like a {} file".format(new_file, item))
                 add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger)
