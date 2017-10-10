@@ -6,18 +6,19 @@ data_inbox: data quality checker
 
 # TODO!!: Add database abstraction layer
 
+import time
+import smtplib
+from email.mime.text import MIMEText
+from string import digits
 import logging
 import sqlite3
 import shutil
 import os
+
 import datetime
 import click
 import fileset_db
-import time
 from fuzzywuzzy import fuzz
-import smtplib
-from email.mime.text import MIMEText
-from string import digits
 
 PARTNER_DATA_FILE = 'partner_data.sql'
 PARTNER_ERROR_CODES_DATA_FILE = 'partner_error_codes.sql'
@@ -39,10 +40,10 @@ MAIL_SERVER = 'smtp.ufl.edu'
     and loading data.', is_flag=True, default=False)
 @click.option('-b', '--buildfileset', help='Build fileset for partner.', \
     is_flag=True, default=False)
-@click.option('-m', '--manual', help='Run in manual mode.', is_flag=True, \
-    default=False)
+#@click.option('-m', '--manual', help='Run in manual mode.', is_flag=True, \
+#    default=False)
 @click.command()
-def main(verbose, create, buildfileset, manual):
+def main(verbose, create, buildfileset):
     """main function for data_inbox."""
     logger = configure_logging(verbose)
 
@@ -56,7 +57,7 @@ def main(verbose, create, buildfileset, manual):
     logger.info("Opening database: %s", FILESET_DATABASE)
     conn = sqlite3.connect(FILESET_DATABASE)
     conn.row_factory = dict_factory
-    c = conn.cursor()
+    conn_cursor = conn.cursor()
 
     # set up tables
     if create:
@@ -78,7 +79,7 @@ def main(verbose, create, buildfileset, manual):
         partner_info[row['id']] = row
 
     # get the next key for the run id
-    current_run_id = check_run_id(c, conn, logger)
+    current_run_id = check_run_id(conn_cursor, conn, logger)
 
     # build fileset, and stop execution after
     if buildfileset:
@@ -105,12 +106,12 @@ def main(verbose, create, buildfileset, manual):
     logger.info("Closing %s", FILESET_DATABASE)
     conn.close()
 
-def check_run_id(c, conn, logger):
+def check_run_id(conn_cursor, conn, logger):
     """Check the previous run's ID and get the current run's ID.
         Update the DB with the new record."""
     logger.info("Getting the next ID for the current run")
-    c.execute("SELECT MAX(id) FROM current_run_status;")
-    penultiumate_run_id = c.fetchone()['MAX(id)']
+    conn_cursor.execute("SELECT MAX(id) FROM current_run_status;")
+    penultiumate_run_id = conn_cursor.fetchone()['MAX(id)']
     if penultiumate_run_id is None:
         current_run_id = 1
         penultiumate_run_id = 0
@@ -130,7 +131,8 @@ def commit_tran(conn, logger):
 
 def read_in_sql_files(sql_file, logger, conn):
     """Read passed in .sql files to load their data into the DB."""
-    create_sql = input("Do you wish to read the {} file into the tables? (y/n)".format(sql_file))
+    create_sql = input("Do you wish to read the {}file into the tables?(y/n) " \
+        .format(sql_file))
     if create_sql.upper() == 'Y':
         logger.info("Reading in data.")
         with open(sql_file, 'r') as myfile:
@@ -142,12 +144,15 @@ def read_in_sql_files(sql_file, logger, conn):
     else:
         logger.info("Skipping reading in data.")
     commit_tran(conn, logger)
+    exit()
 
 def run_partner_report(conn, logger, current_run_id, partner_info):
     """Report status of current run."""
     output_report = ""
     logger.debug("Current run status")
-    output_report += "OneFlorida Data Trust partner file check for " + str(datetime.datetime.now()) + "\n\n\nPartner-level summaries\n-----------------------\n\n"
+    output_report += "OneFlorida Data Trust partner file check for " \
+        + str(datetime.datetime.now()) \
+        + "\n\n\nPartner-level summaries\n-----------------------\n\n"
     no_new_data = "No new data\n--------------------\n"
     no_new_data_initial_len = len(no_new_data)
     dir_not_found = "Directory not found\n--------------------\n"
@@ -206,13 +211,17 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
 def run_file_report(conn, logger, current_run_id, partner_info):
     report = "\n\n\nDetailed report\n--------------------\n\n"
     # first get list of partners we need to report on
-    partner_list = conn.execute("SELECT partner FROM partner_run_status WHERE code = 3 AND run_id = ?", (str(current_run_id),))
+    partner_list = conn.execute("SELECT partner FROM partner_run_status \
+        WHERE code = 3 AND run_id = ?", (str(current_run_id),))
     # next, get the file error codes
     for partner in partner_list:
         # get the partner name\
         partner_code = partner['partner']
-        partner_name = conn.execute("SELECT name_full from partners where id = ?", (partner['partner'],)).fetchone()
-        file_list = conn.execute("SELECT code, partner, run_id, filename_pattern, cols_add, cols_del FROM file_run_status WHERE run_id = ? AND partner = ?", (int(current_run_id), partner_code))
+        partner_name = conn.execute("SELECT name_full from partners \
+            WHERE id = ?", (partner['partner'],)).fetchone()
+        file_list = conn.execute("SELECT code, partner, run_id, \
+            filename_pattern, cols_add, cols_del FROM file_run_status WHERE \
+            run_id = ? AND partner = ?", (int(current_run_id), partner_code))
         do_once = True
         for item in file_list:
             while do_once:
@@ -222,20 +231,31 @@ def run_file_report(conn, logger, current_run_id, partner_info):
             logger.debug("Partner %s %s ", partner_code, partner_name)
             logger.debug(item)
             if item['code'] == 1:
-                report += "{} has no change in header. OK to process.\n".format(item['filename_pattern'])
+                report += "{} has no change in header. OK to process.\n" \
+                    .format(item['filename_pattern'])
             elif item['code'] == 2:
-                report += "{} has a new column {}. Check before processing.\n".format(item['filename_pattern'], item['cols_add'])
+                report += "{} has a new column {}. Check before processing.\n" \
+                    .format(item['filename_pattern'], item['cols_add'])
             elif item['code'] == 3:
-                report += "{} is missing previously existing column(s) {}. Check before processing.\n".format(item['filename_pattern'], item['cols_del'])
+                report += "{} is missing previously existing column(s) {}. \
+                    Check before processing.\n"\
+                    .format(item['filename_pattern'], item['cols_del'])
             elif item['code'] == 4:
-                report += "{} may be missing a header. No previous column names matched. Check before processing.\n".format(item['filename_pattern'])
+                report += "{} may be missing a header. No previous column names" \
+                    " matched. Check before processing.\n"\
+                    .format(item['filename_pattern'])
             #TODO does this ever get triggered?
             elif item['code'] == 5:
-                report += "{} is a new or unidentified filetype. Update partners_filesets to match.\n".format(item['filename_pattern'])
+                report += "{} is a new or unidentified filetype. Update \
+                    partners_filesets to match.\n"\
+                    .format(item['filename_pattern'])
             elif item['code'] == 6:
-                report += "{} has missing columns {} and new columns {}. Check before processing.\n".format(item['filename_pattern'], item['cols_del'], item['cols_add'])
+                report += "{} has missing columns {} and new columns {}. Check \
+                before processing.\n".format(item['filename_pattern'], \
+                item['cols_del'], item['cols_add'])
             elif item['code'] == 7:
-                report += "No previous fileset stored for partner. Header(s) have not been checked.\n"
+                report += "No previous fileset stored for partner. " \
+                "Header(s) have not been checked.\n"
 
         do_once = True
         while do_once:
@@ -244,7 +264,7 @@ def run_file_report(conn, logger, current_run_id, partner_info):
     return report
 
 def setup_tables(conn, logger):
-    create_sql = input("Do you wish to create the needed SQL tables? (y/n)")
+    create_sql = input("Do you wish to create the needed SQL tables? (y/n) ")
     if create_sql.upper() == 'Y':
         logger.info("Creating necessary tables.")
         try:
@@ -258,7 +278,8 @@ def setup_tables(conn, logger):
 def check_partner_dirs(partner_info, conn, logger, current_run_id):
     """Iterate over partners and check to see if there are files."""
     # get list of partners and locations of files
-    partner_list_query = ("SELECT id, name, name_full, incoming_file_directory, tocheck FROM partners")
+    partner_list_query = ("SELECT id, name, name_full, incoming_file_directory,\
+        tocheck FROM partners")
     partner_list = conn.execute(partner_list_query)
     for partner in partner_list:
         if partner['tocheck'] == "False":
@@ -299,7 +320,8 @@ def make_partners_to_check_list(partner_info, conn, logger, current_run_id):
             pass # directory not found
         if row['code'] == 3:
             logger.info("Adding partner %s to the list to check", partner_name)
-            partners_to_check.append({'id':partner_id, 'name_full':partner_name, 'dir':partner_directory})
+            partners_to_check.append({'id':partner_id, \
+                'name_full':partner_name, 'dir':partner_directory})
     return partners_to_check
 
 def check_partner_files(partner_info, conn, logger, current_run_id):
@@ -318,7 +340,10 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
         for new_file in new_fileset:
             partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
             if not partner_fileset:
-                conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (7, pid, current_run_id, filename, "unknown"))
+                conn.execute("INSERT INTO file_run_status (code, partner, \
+                    run_id, filename_pattern, filetype) \
+                    VALUES (?, ?, ?, ?, ?)", (7, pid, current_run_id, \
+                    filename, "unknown"))
                 commit_tran(conn, logger)
                 return
             logger.debug("partner_fileset len: %i", len(partner_fileset))
@@ -327,7 +352,8 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
             file_extension = new_file.split('.')[1].lower()
             logger.debug("File extension: %s", file_extension)
             if file_extension in FILETYPES_TO_SKIP:
-                logger.debug("Not checking %s because it is in the list of filetypes to skip.", new_file)
+                logger.debug("Not checking %s because it is in the list of \
+                    filetypes to skip.", new_file)
                 continue
             # find a match
             # search the fileset to find a matching filename
@@ -357,7 +383,10 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
 
             if max_score['score'] == 0:
                 logger.info("new file: %s has no match", new_file_trim)
-                result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, filename, "unknown"))
+                result = conn.execute("INSERT INTO file_run_status (code, \
+                    partner, run_id, filename_pattern, filetype) \
+                    VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, \
+                    filename, "unknown"))
             else:
                 filename = max_score['filename']
                 cols = ""
@@ -371,30 +400,46 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 elif len(status_and_cols) == 3:
                     cols_add = status_and_cols[1]
                     cols_del = status_and_cols[2]
-                get_status(status, pid, current_run_id, new_file, cols, cols_add, cols_del, conn, logger)
+                get_status(status, pid, current_run_id, new_file, cols, \
+                    cols_add, cols_del, conn, logger)
 
 
-def get_status(status, pid, current_run_id, new_file, cols, cols_add, cols_del, conn, logger):
+def get_status(status, pid, current_run_id, new_file, cols, cols_add, \
+            cols_del, conn, logger):
     """Given a status code, insert a row recording the file_run_status and log it."""
     if status == 1:
         logger.info("Storing exact match status for %s", new_file)
-        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (1, pid, current_run_id, new_file, "unknown"))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+            run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", \
+            (1, pid, current_run_id, new_file, "unknown"))
         return
     elif status == 2:
         logger.info("Storing new column status for {}".format(new_file))
-        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_add) VALUES (?, ?, ?, ?, ?, ?)", (2, pid, current_run_id, new_file, "unknown", str(cols)))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+            run_id, filename_pattern, filetype, cols_add) \
+            VALUES (?, ?, ?, ?, ?, ?)", (2, pid, current_run_id, new_file, \
+            "unknown", str(cols)))
         return
     elif status == 3:
         logger.info("Storing deleted column status for {}".format(new_file))
-        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_del) VALUES (?, ?, ?, ?, ?, ?)", (3, pid, current_run_id, new_file, "unknown", str(cols)))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+            run_id, filename_pattern, filetype, cols_del) \
+            VALUES (?, ?, ?, ?, ?, ?)", (3, pid, current_run_id, \
+            new_file, "unknown", str(cols)))
         return
     elif status == 4:
         logger.info("Storing missing header status for {}".format(new_file))
-        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (4, pid, current_run_id, new_file, "unknown"))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+            run_id, filename_pattern, filetype) \
+            VALUES (?, ?, ?, ?, ?)", (4, pid, current_run_id, new_file, "unknown"))
         return
     elif status == 6:
-        logger.info("Storing missing and added col status status for {}".format(new_file))
-        result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype, cols_add, cols_del) VALUES (?, ?, ?, ?, ?, ?, ?)", (6, pid, current_run_id, new_file, "unknown"), cols_add, cols_del)
+        logger.info("Storing missing and added col status status for {}"\
+            .format(new_file))
+        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+            run_id, filename_pattern, filetype, cols_add, cols_del) \
+            VALUES (?, ?, ?, ?, ?, ?, ?)", (6, pid, current_run_id, new_file,\
+            "unknown"), cols_add, cols_del)
     else:
         logger.info("something went wrong. status {}".format(status))
 
@@ -416,7 +461,7 @@ def load_previous_fileset(conn, pid, logger, name_full):
     logger.info("Loading previous fileset for %s", name_full)
     if len(partner_fileset) == 0:
         logger.warning("No previous recorded fileset stored for %s", name_full)
-        logger.error('%s ill not be checked in this run.', name_full)
+        logger.error('%s will not be checked in this run.', name_full)
         return
     #else:
         #logger.debug(partner_fileset)
@@ -426,8 +471,8 @@ def add_new_fileset(conn, logger):
     """Read files on disk and build a new fileset record for the partner."""
     partner_list = get_partner_list(conn, logger)
     filetype_dict = get_filetype_dict(conn, logger)
-    logger.info("Current list of partners")
-    logger.info(partner_list)
+    logger.debug("Current list of partners")
+    logger.debug(partner_list)
     for partner in partner_list:
         name = partner_list[partner]['name']
         directory = partner_list[partner]['stored_file_directory']
@@ -444,7 +489,9 @@ def add_new_fileset(conn, logger):
             list_of_dirs = sorted(list_of_dirs, reverse=True)
             list_of_dirs_count = len(list_of_dirs)
             for new_dir in list_of_dirs:
-                get_out = input("There are {} remaining directories to scan for {}. Do you wish to continue? (Y/N)".format(list_of_dirs_count, name))
+                get_out = input("There are {} remaining directories to scan " \
+                    "for {}. Do you wish to continue? (Y/N)" \
+                    .format(list_of_dirs_count, name))
                 list_of_dirs_count = list_of_dirs_count - 1
                 if get_out == 'N' or get_out == 'n':
                     break
@@ -471,7 +518,10 @@ def get_partner_list(conn, logger):
     partner_dict = {}
     for partner in partner_data:
         partner_key = partner['id']
-        partner_dict[partner_key] = {'name': partner['name'], 'incoming_file_directory': partner['incoming_file_directory'], 'stored_file_directory': partner['stored_file_directory'], 'tocheck': partner['tocheck']}
+        partner_dict[partner_key] = {'name': partner['name'], \
+            'incoming_file_directory': partner['incoming_file_directory'], \
+            'stored_file_directory': partner['stored_file_directory'], \
+            'tocheck': partner['tocheck']}
     return partner_dict
 
 def guess_filetype(partner, new_file, filetype_dict, header, conn, logger):
@@ -507,27 +557,36 @@ def guess_filetype(partner, new_file, filetype_dict, header, conn, logger):
 
 def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
     """Function to add a new file to the filetype dictionary."""
-    logger.info("Adding new filetype record for partner %s for filetype_id %i", partner, filetype_id)
+    logger.info("Adding new filetype record for partner %s for " \
+        "filetype_id %i", partner, filetype_id)
     date_now = time.strftime('%Y-%m-%d %H:%M:%S')
     # get existing filetype record
-    existing_filetype_row = conn.execute("SELECT * FROM partners_filesets WHERE pid = ? AND filetype = ?", (partner, filetype_id))
+    existing_filetype_row = conn.execute("SELECT * FROM partners_filesets \
+        WHERE pid = ? AND filetype = ?", (partner, filetype_id))
     # partner can have multiple unknown, but can't have matching names
     try:
         existing_filetype_row = existing_filetype_row.fetchone()
     except:
         logger.debug("No previous record found.")
     if existing_filetype_row and int(filetype_id) != 31:
-        logger.info("Existing filetype record found for partner %s and filetype %i", partner, filetype_id)
+        logger.info("Existing filetype record found for partner %s and" \
+            "filetype %i", partner, filetype_id)
         logger.info("Deleting previous filetype records from partners_filesets")
-        delete_tran = conn.execute("DELETE FROM partners_filesets WHERE pid = ? AND filetype = ?", (partner, filetype_id))
+        delete_tran = conn.execute("DELETE FROM partners_filesets \
+            WHERE pid = ? AND filetype = ?", (partner, filetype_id))
         commit_tran(conn, logger)
-    elif existing_filetype_row and int(filetype_id) == 31 and new_file == existing_filetype_row['filename_pattern']:
-        logger.info("Matching file of unknown type with same name already added for partner. Skipping.")
+    elif existing_filetype_row and int(filetype_id) == 31 and \
+            new_file == existing_filetype_row['filename_pattern']:
+        logger.info("Matching file of unknown type with same name \
+            already added for partner. Skipping.")
         return None
     else:
-        logger.info("No existing filetype record found for partner %s and filetype %i", partner, filetype_id)
+        logger.info("No existing filetype record found for partner %s \
+            and filetype %i", partner, filetype_id)
     logger.info("Adding new filetype record.")
-    result = conn.execute("INSERT INTO partners_filesets (pid, date, filename_pattern, filetype, header) VALUES (?, ?, ?, ?, ?)", (int(partner), date_now, new_file, filetype_id, header.strip()))
+    result = conn.execute("INSERT INTO partners_filesets (pid, date, \
+        filename_pattern, filetype, header) VALUES (?, ?, ?, ?, ?)", \
+        (int(partner), date_now, new_file, filetype_id, header.strip()))
     commit_tran(conn, logger)
     #logger.warning("add_to_filetype_dict not yet implemented. NOOP")
 
@@ -571,7 +630,6 @@ def check_header(new_file, partner_directory, prev_header, logger):
                 header_cols.remove(old_col)
                 logger.debug("Removed old column %s", old_col)
             except ValueError:
-                deleted_columns = True
                 logger.info("Old column %s is missing.", old_col)
                 missing_header_cols.append(old_col)
         logger.debug("After matching columns: %i", len(header_cols))
@@ -583,11 +641,12 @@ def check_header(new_file, partner_directory, prev_header, logger):
             logger.info("No columns from new header match old header.")
             logger.info("Header may haven been deleted.")
             return [4]
-        elif len(header_cols) != starting_new_header_len and missing_header_cols:
+        elif len(header_cols) != starting_new_header_len and \
+            len(missing_header_cols) != 0:
             # at least some columns matched
             logger.info("Columns deleted.")
             return [3, missing_header_cols]
-        elif len(header_cols) != 0 and missing_header_cols:
+        elif len(header_cols) != 0 and len(missing_header_cols) != 0:
             # columns added and deleted
             logger.info("Columns added and deleted")
             return [6, header_cols, missing_header_cols]
@@ -610,19 +669,19 @@ def configure_logging(verbose):
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     logger.setLevel(logging.DEBUG)
     # logging to file
-    fh = logging.FileHandler('data_inbox.log')
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
+    file_handler_logger = logging.FileHandler('data_inbox.log')
+    file_handler_logger.setLevel(logging.DEBUG)
+    file_handler_logger.setFormatter(formatter)
+    logger.addHandler(file_handler_logger)
 
     # logging to console
-    ch = logging.StreamHandler()
+    console_handler_logger = logging.StreamHandler()
     if verbose:
-        ch.setLevel(logging.DEBUG)
+        console_handler_logger.setLevel(logging.DEBUG)
     else:
-        ch.setLevel(logging.WARNING)
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+        console_handler_logger.setLevel(logging.INFO)
+    console_handler_logger.setFormatter(formatter)
+    logger.addHandler(console_handler_logger)
 
     return logger
 
