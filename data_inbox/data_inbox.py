@@ -49,11 +49,11 @@ def main(verbose, create, buildfileset, manual):
     logger.info("Starting data_inbox.py")
     # backup db if it already exists
     if os.path.isfile(FILESET_DATABASE):
-        logger.info("Backing up database {} to {}".format(FILESET_DATABASE, \
-            FILESET_DATABASE_BACKUP))
+        logger.info("Backing up database %s to %s", FILESET_DATABASE, \
+            FILESET_DATABASE_BACKUP)
         shutil.copy2(FILESET_DATABASE, FILESET_DATABASE_BACKUP)
     # open existing db
-    logger.info("Opening database: {}".format(FILESET_DATABASE))
+    logger.info("Opening database: %s", FILESET_DATABASE)
     conn = sqlite3.connect(FILESET_DATABASE)
     conn.row_factory = dict_factory
     c = conn.cursor()
@@ -102,7 +102,7 @@ def main(verbose, create, buildfileset, manual):
     print("*****************")
 
     commit_tran(conn, logger)
-    logger.info("Closing {}".format(FILESET_DATABASE))
+    logger.info("Closing %s", FILESET_DATABASE)
     conn.close()
 
 def check_run_id(c, conn, logger):
@@ -117,7 +117,7 @@ def check_run_id(c, conn, logger):
     else:
         current_run_id = penultiumate_run_id + 1
     logger.debug("Penultiumate run ID: %i", penultiumate_run_id)
-    logger.info("This is current_run_status id {}".format(current_run_id))
+    logger.info("This is current_run_status id %i", current_run_id)
     # update the run table
     current_date = datetime.datetime.now()
     conn.execute("INSERT INTO current_run_status (run_date) VALUES (current_date)")
@@ -125,7 +125,7 @@ def check_run_id(c, conn, logger):
 
 def commit_tran(conn, logger):
     """Helper function to commit changes to DB."""
-    logger.info("Committing changes to {}".format(FILESET_DATABASE))
+    logger.info("Committing changes to %s", FILESET_DATABASE)
     conn.commit()
 
 def read_in_sql_files(sql_file, logger, conn):
@@ -135,10 +135,10 @@ def read_in_sql_files(sql_file, logger, conn):
         logger.info("Reading in data.")
         with open(sql_file, 'r') as myfile:
             sql_file_data = myfile.read()
-        logger.info("Read in {} bytes from {}".format(len(sql_file_data), sql_file))
+        logger.info("Read in %i bytes from %s", len(sql_file_data), sql_file)
         logger.info(sql_file_data)
         conn.execute(sql_file_data)
-        logger.info("Loaded {} into database.".format(sql_file))
+        logger.info("Loaded %s into database.", sql_file)
     else:
         logger.info("Skipping reading in data.")
     commit_tran(conn, logger)
@@ -219,7 +219,7 @@ def run_file_report(conn, logger, current_run_id, partner_info):
                 report += partner_name['name_full'] +"\n"
                 report += "-----------------------\n"
                 do_once = False
-            logger.debug("Partner {} {} ".format(partner_code, partner_name))
+            logger.debug("Partner %s %s ", partner_code, partner_name)
             logger.debug(item)
             if item['code'] == 1:
                 report += "{} has no change in header. OK to process.\n".format(item['filename_pattern'])
@@ -262,21 +262,21 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
     partner_list = conn.execute(partner_list_query)
     for partner in partner_list:
         if partner['tocheck'] == "False":
-            logger.info("{} is set to be not checked.".format(partner['name_full']))
+            logger.info("%s is set to be not checked.", partner['name_full'])
             error_code = 4
             conn.execute('INSERT INTO partner_run_status \
                 (code, partner, run_id) VALUES (?, ?, ?)', \
                 (error_code, partner['id'], current_run_id))
             continue
         error_code = None
-        logger.info("Now checking {}".format(partner['name_full']))
+        logger.info("Now checking %s", partner['name_full'])
         if not os.path.isdir(partner['incoming_file_directory']):
-            logger.error("Path {} not found for {}" \
-                .format(partner['incoming_file_directory'], partner['name_full']))
+            logger.error("Path %s not found for %s", \
+                partner['incoming_file_directory'], partner['name_full'])
             error_code = 2  # directory missing
         elif not os.listdir(partner['incoming_file_directory']):
-            logger.info("Path {} empty found for {}" \
-                .format(partner['incoming_file_directory'], partner['name_full']))
+            logger.info("Path %s empty found for %s", \
+                partner['incoming_file_directory'], partner['name_full'])
             error_code = 1  # no files, therefore no new files
         else:
             error_code = 3
@@ -298,7 +298,7 @@ def make_partners_to_check_list(partner_info, conn, logger, current_run_id):
         if row['code'] == 2:
             pass # directory not found
         if row['code'] == 3:
-            logger.info("Adding partner {} to the list to check".format(partner_name))
+            logger.info("Adding partner %s to the list to check", partner_name)
             partners_to_check.append({'id':partner_id, 'name_full':partner_name, 'dir':partner_directory})
     return partners_to_check
 
@@ -311,7 +311,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
         name_full = partner['name_full']
         pid = partner['id']
         directory = partner['dir']
-        logger.info("Now checking {} ".format(name_full))
+        logger.info("Now checking %s ", name_full)
         # load the previous fileset info
         #partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
         new_fileset = os.listdir(directory)
@@ -321,13 +321,13 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (7, pid, current_run_id, filename, "unknown"))
                 commit_tran(conn, logger)
                 return
-            logger.debug("partner_fileset len: {}".format(len(partner_fileset)))
+            logger.debug("partner_fileset len: %i", len(partner_fileset))
             #logger.debug(partner_fileset)
-            logger.info("Now checking new file {}".format(new_file))
+            logger.info("Now checking new file %s", new_file)
             file_extension = new_file.split('.')[1].lower()
-            logger.debug("File extension: {}".format(file_extension))
+            logger.debug("File extension: %s", file_extension)
             if file_extension in FILETYPES_TO_SKIP:
-                logger.debug("Not checking {} because it is in the list of filetypes to skip.".format(new_file))
+                logger.debug("Not checking %s because it is in the list of filetypes to skip.", new_file)
                 continue
             # find a match
             # search the fileset to find a matching filename
@@ -335,7 +335,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
             for row in partner_fileset:
                 # previous filename
                 filename = row['filename_pattern']
-                logger.debug("Current filename: {}".format(filename))
+                logger.debug("Current filename: %s", filename)
                 # current filename check
                 #logger.debug(filename)
                 new_file_trim = new_file.split('.')[0]
@@ -350,20 +350,20 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                     max_score['score'] = current_score
                     max_score['filename'] = filename
                     max_score['header'] = row['header']
-                logger.info("Continuing to attempt to match {}".format(new_file_trim))
+                logger.info("Continuing to attempt to match %s", new_file_trim)
                 #if new == fname or new in fname \
                 #    or fuzz.ratio(new, fname) > MATCH_RATIO or new.find(fname) != -1:
                 logger.debug(max_score)
 
             if max_score['score'] == 0:
-                logger.info("new file: {} has no match".format(new_file_trim))
+                logger.info("new file: %s has no match", new_file_trim)
                 result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, filename, "unknown"))
             else:
                 filename = max_score['filename']
                 cols = ""
                 cols_add = ""
                 cols_del = ""
-                logger.info("Match found: {}".format(filename))
+                logger.info("Match found: %s", filename)
                 status_and_cols = check_header(new_file, directory, max_score['header'], logger)
                 status = status_and_cols[0]
                 if len(status_and_cols) == 2:
@@ -377,7 +377,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
 def get_status(status, pid, current_run_id, new_file, cols, cols_add, cols_del, conn, logger):
     """Given a status code, insert a row recording the file_run_status and log it."""
     if status == 1:
-        logger.info("Storing exact match status for {}".format(new_file))
+        logger.info("Storing exact match status for %s", new_file)
         result = conn.execute("INSERT INTO file_run_status (code, partner, run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", (1, pid, current_run_id, new_file, "unknown"))
         return
     elif status == 2:
@@ -413,10 +413,10 @@ def load_previous_fileset(conn, pid, logger, name_full):
             'filename_pattern': item['filename_pattern'], \
             'header': item['header']})
 
-    logger.info("Loading previous fileset for {}".format(name_full))
+    logger.info("Loading previous fileset for %s", name_full)
     if len(partner_fileset) == 0:
-        logger.warning("No previous recorded fileset stored for {}".format(name_full))
-        logger.fatal('{} will not be checked in this run.'.format(name_full))
+        logger.warning("No previous recorded fileset stored for %s", name_full)
+        logger.error('%s ill not be checked in this run.', name_full)
         return
     #else:
         #logger.debug(partner_fileset)
@@ -434,17 +434,17 @@ def add_new_fileset(conn, logger):
         try:
             list_of_dirs = os.listdir(directory)
         except:
-            logger.error("Directory {} not found.".format(directory))
+            logger.error("Directory %s not found.", directory)
             continue
         if not list_of_dirs:
-            logger.info("File directory empty for {}. Skipping building fileset.".format(name))
+            logger.info("File directory empty for %s. Skipping building fileset.", name)
         else:
-            logger.info("Now building fileset for {}".format(name))
+            logger.info("Now building fileset for %s", name)
             # iterate over newest first
             list_of_dirs = sorted(list_of_dirs, reverse=True)
             list_of_dirs_count = len(list_of_dirs)
             for new_dir in list_of_dirs:
-                get_out = input("There are {} remaining directories to scan for {}. Do you wish to continue? (Y/N)".format(str(list_of_dirs_count), name))
+                get_out = input("There are {} remaining directories to scan for {}. Do you wish to continue? (Y/N)".format(list_of_dirs_count, name))
                 list_of_dirs_count = list_of_dirs_count - 1
                 if get_out == 'N' or get_out == 'n':
                     break
@@ -453,7 +453,7 @@ def add_new_fileset(conn, logger):
                 for new_file in list_of_files:
                     with open(os.path.join(new_dir, new_file), 'r') as f:
                         header = f.readline()
-                    logger.info("Now trying to add file {} to fileset.".format(new_file))
+                    logger.info("Now trying to add file %s to fileset.", new_file)
                     guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
 
 def get_filetype_dict(conn, logger):
@@ -484,7 +484,7 @@ def guess_filetype(partner, new_file, filetype_dict, header, conn, logger):
     file_matched = False
     # try exact match (case doesn't matter) first
     if new_file_upper in filetype_dict.keys():
-        logger.info("Exact match found: {} looks like a {} file.".format(new_file, new_file.upper()))
+        logger.info("Exact match found: %s looks like a %s file.", new_file, new_file.upper())
         filetype_id = filetype_dict[new_file_upper]
         add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger)
         file_matched = True
@@ -496,18 +496,18 @@ def guess_filetype(partner, new_file, filetype_dict, header, conn, logger):
             #logger.debug(new_file_upper)
             #logger.debug(fuzz.ratio(new_file_upper, item))
             if fuzz.ratio(new_file_upper, item) > MATCH_RATIO or new_file_upper.find(item) != -1:
-                logger.info("Partial match found for {}: looks like a {} file".format(new_file, item))
+                logger.info("Partial match found for %s: looks like a %s file", new_file, item)
                 add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger)
                 file_matched = True
                 break
     if not file_matched:
-        logger.info("No full match found for {}. Not sure what it is.".format(new_file))
+        logger.info("No full match found for %s. Not sure what it is.", new_file)
         logger.info("Adding with full filename.")
         add_to_filetype_dict(partner, 31, new_file, header, conn, logger)
 
 def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
     """Function to add a new file to the filetype dictionary."""
-    logger.info("Adding new filetype record for partner {} for filetype_id {}".format(partner, filetype_id))
+    logger.info("Adding new filetype record for partner %s for filetype_id %i", partner, filetype_id)
     date_now = time.strftime('%Y-%m-%d %H:%M:%S')
     # get existing filetype record
     existing_filetype_row = conn.execute("SELECT * FROM partners_filesets WHERE pid = ? AND filetype = ?", (partner, filetype_id))
@@ -517,7 +517,7 @@ def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
     except:
         logger.debug("No previous record found.")
     if existing_filetype_row and int(filetype_id) != 31:
-        logger.info("Existing filetype record found for partner {} and filetype {}".format(partner, filetype_id))
+        logger.info("Existing filetype record found for partner %s and filetype %i", partner, filetype_id)
         logger.info("Deleting previous filetype records from partners_filesets")
         delete_tran = conn.execute("DELETE FROM partners_filesets WHERE pid = ? AND filetype = ?", (partner, filetype_id))
         commit_tran(conn, logger)
@@ -525,7 +525,7 @@ def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
         logger.info("Matching file of unknown type with same name already added for partner. Skipping.")
         return None
     else:
-        logger.info("No existing filetype record found for partner {} and filetype {}".format(partner, filetype_id))
+        logger.info("No existing filetype record found for partner %s and filetype %i", partner, filetype_id)
     logger.info("Adding new filetype record.")
     result = conn.execute("INSERT INTO partners_filesets (pid, date, filename_pattern, filetype, header) VALUES (?, ?, ?, ?, ?)", (int(partner), date_now, new_file, filetype_id, header.strip()))
     commit_tran(conn, logger)
@@ -546,19 +546,19 @@ def find_delim_and_split(line, logger):
             delim = '\t'
             line_split = split_on_delim(line, delim)
             if len(line_split) == 1:
-                logger.error("Couldn't find correct delimiter to split {}".format(line))
+                logger.error("Couldn't find correct delimiter to split %s", line)
     return line_split, delim
 
 def check_header(new_file, partner_directory, prev_header, logger):
     """Check new file header against previous header."""
     # TODO: make this work on non-exact matching
-    logger.info("Now checking header for {}".format(new_file))
+    logger.info("Now checking header for %s", new_file)
     with open(partner_directory + new_file, 'r') as f:
         header_row = f.readline().strip()
 
-        logger.debug("Header for file {}:\n{}".format(new_file, header_row.strip()))
+        logger.debug("Header for file %s:\n%s", new_file, header_row.strip())
         header_cols, delim = find_delim_and_split(header_row, logger)
-        logger.debug("DELIMITER: {}".format(delim))
+        logger.debug("DELIMITER: %s", delim)
         prev_header = prev_header.split(delim)
         missing_header_cols = []
         #logger.debug(header_cols)
@@ -566,21 +566,21 @@ def check_header(new_file, partner_directory, prev_header, logger):
         starting_new_header_len = len(header_cols)
         # iterate over old header, deleting any cols in new header that match
         for old_col in prev_header:
-            logger.debug("Column header trying to match: {}".format(old_col))
+            logger.debug("Column header trying to match: %s", old_col)
             try:
                 header_cols.remove(old_col)
-                logger.debug("Removed old column {}".format(old_col))
+                logger.debug("Removed old column %s", old_col)
             except ValueError:
                 deleted_columns = True
-                logger.info("Old column {} is missing.".format(old_col))
+                logger.info("Old column %s is missing.", old_col)
                 missing_header_cols.append(old_col)
-        logger.debug("After matching columns: {}".format(len(header_cols)))
+        logger.debug("After matching columns: %i", len(header_cols))
         if len(header_cols) == 0 and not missing_header_cols:
-            logger.info("{} header exactly matches old header. No change in header.".format(new_file))
+            logger.info("%s header exactly matches old header. No change in header.", new_file)
             return [1]
         elif len(header_cols) == starting_new_header_len:
             # if the length hasn't changed, assume header is missing in file
-            logger.info("No columns from new header match old header.".format(new_file))
+            logger.info("No columns from new header match old header.")
             logger.info("Header may haven been deleted.")
             return [4]
         elif len(header_cols) != starting_new_header_len and missing_header_cols:
@@ -592,8 +592,8 @@ def check_header(new_file, partner_directory, prev_header, logger):
             logger.info("Columns added and deleted")
             return [6, header_cols, missing_header_cols]
         else:
-            logger.info("{} header does not match old header.".format(new_file))
-            logger.info("New column(s) found: {}".format(header_cols))
+            logger.info("%s header does not match old header.", new_file)
+            logger.info("New column(s) found: %s", header_cols)
             return [2, header_cols]
 
 def dict_factory(cursor, row):
