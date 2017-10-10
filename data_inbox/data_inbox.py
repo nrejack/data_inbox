@@ -41,7 +41,7 @@ MAIL_SERVER = 'smtp.ufl.edu'
 @click.option('-b', '--buildfileset', help='Build fileset for partner.', \
     is_flag=True, default=False)
 #@click.option('-m', '--manual', help='Run in manual mode.', is_flag=True, \
-#    default=False)
+#cd da    default=False)
 @click.command()
 def main(verbose, create, buildfileset):
     """main function for data_inbox."""
@@ -237,8 +237,8 @@ def run_file_report(conn, logger, current_run_id, partner_info):
                 report += "{} has a new column {}. Check before processing.\n" \
                     .format(item['filename_pattern'], item['cols_add'])
             elif item['code'] == 3:
-                report += "{} is missing previously existing column(s) {}. \
-                    Check before processing.\n"\
+                report += "{} is missing previously existing column(s) {}. " \
+                    "Check before processing.\n"\
                     .format(item['filename_pattern'], item['cols_del'])
             elif item['code'] == 4:
                 report += "{} may be missing a header. No previous column names" \
@@ -361,7 +361,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
             for row in partner_fileset:
                 # previous filename
                 filename = row['filename_pattern']
-                logger.debug("Current filename: %s", filename)
+                logger.debug("Current filename from fileset: %s", filename)
                 # current filename check
                 #logger.debug(filename)
                 new_file_trim = new_file.split('.')[0]
@@ -376,14 +376,16 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                     max_score['score'] = current_score
                     max_score['filename'] = filename
                     max_score['header'] = row['header']
+                    logger.debug("new max score found:")
+                    logger.debug(max_score)
+
                 logger.info("Continuing to attempt to match %s", new_file_trim)
                 #if new == fname or new in fname \
                 #    or fuzz.ratio(new, fname) > MATCH_RATIO or new.find(fname) != -1:
-                logger.debug(max_score)
 
             if max_score['score'] == 0:
                 logger.info("new file: %s has no match", new_file_trim)
-                result = conn.execute("INSERT INTO file_run_status (code, \
+                conn.execute("INSERT INTO file_run_status (code, \
                     partner, run_id, filename_pattern, filetype) \
                     VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, \
                     filename, "unknown"))
@@ -409,37 +411,37 @@ def get_status(status, pid, current_run_id, new_file, cols, cols_add, \
     """Given a status code, insert a row recording the file_run_status and log it."""
     if status == 1:
         logger.info("Storing exact match status for %s", new_file)
-        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+        conn.execute("INSERT INTO file_run_status (code, partner, \
             run_id, filename_pattern, filetype) VALUES (?, ?, ?, ?, ?)", \
             (1, pid, current_run_id, new_file, "unknown"))
         return
     elif status == 2:
         logger.info("Storing new column status for {}".format(new_file))
-        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+        conn.execute("INSERT INTO file_run_status (code, partner, \
             run_id, filename_pattern, filetype, cols_add) \
             VALUES (?, ?, ?, ?, ?, ?)", (2, pid, current_run_id, new_file, \
             "unknown", str(cols)))
         return
     elif status == 3:
         logger.info("Storing deleted column status for {}".format(new_file))
-        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+        conn.execute("INSERT INTO file_run_status (code, partner, \
             run_id, filename_pattern, filetype, cols_del) \
             VALUES (?, ?, ?, ?, ?, ?)", (3, pid, current_run_id, \
             new_file, "unknown", str(cols)))
         return
     elif status == 4:
         logger.info("Storing missing header status for {}".format(new_file))
-        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+        conn.execute("INSERT INTO file_run_status (code, partner, \
             run_id, filename_pattern, filetype) \
             VALUES (?, ?, ?, ?, ?)", (4, pid, current_run_id, new_file, "unknown"))
         return
     elif status == 6:
         logger.info("Storing missing and added col status status for {}"\
             .format(new_file))
-        result = conn.execute("INSERT INTO file_run_status (code, partner, \
+        conn.execute("INSERT INTO file_run_status (code, partner, \
             run_id, filename_pattern, filetype, cols_add, cols_del) \
             VALUES (?, ?, ?, ?, ?, ?, ?)", (6, pid, current_run_id, new_file,\
-            "unknown"), cols_add, cols_del)
+            "unknown", str(cols_add), str(cols_del)))
     else:
         logger.info("something went wrong. status {}".format(status))
 
@@ -584,7 +586,7 @@ def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
         logger.info("No existing filetype record found for partner %s \
             and filetype %i", partner, filetype_id)
     logger.info("Adding new filetype record.")
-    result = conn.execute("INSERT INTO partners_filesets (pid, date, \
+    conn.execute("INSERT INTO partners_filesets (pid, date, \
         filename_pattern, filetype, header) VALUES (?, ?, ?, ?, ?)", \
         (int(partner), date_now, new_file, filetype_id, header.strip()))
     commit_tran(conn, logger)
@@ -633,7 +635,7 @@ def check_header(new_file, partner_directory, prev_header, logger):
                 logger.info("Old column %s is missing.", old_col)
                 missing_header_cols.append(old_col)
         logger.debug("After matching columns: %i", len(header_cols))
-        if len(header_cols) == 0 and not missing_header_cols:
+        if len(header_cols) == 0 and len(missing_header_cols) == 0:
             logger.info("%s header exactly matches old header. No change in header.", new_file)
             return [1]
         elif len(header_cols) == starting_new_header_len:
@@ -642,7 +644,7 @@ def check_header(new_file, partner_directory, prev_header, logger):
             logger.info("Header may haven been deleted.")
             return [4]
         elif len(header_cols) != starting_new_header_len and \
-            len(missing_header_cols) != 0:
+            len(missing_header_cols) == 0:
             # at least some columns matched
             logger.info("Columns deleted.")
             return [3, missing_header_cols]
