@@ -304,7 +304,7 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
         if error_code:
             conn.execute('INSERT INTO partner_run_status \
                 (code, partner, run_id) VALUES (?, ?, ?)', \
-                (error_code, partner['id'], current_run_id))
+                (error_code, partner['id'], current_run_id))``
 def make_partners_to_check_list(partner_info, conn, logger, current_run_id):
     """Generate list of partners to check"""
     partners_to_check = []
@@ -505,8 +505,6 @@ def add_new_fileset(conn, logger):
                             header = f.readline()
                         logger.info("Now trying to add file %s to fileset.", new_file)
                         guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
-                else:
-                    continue
 
 def get_filetype_dict(conn, logger):
     """Utility function that gets the dict of filetypes."""
