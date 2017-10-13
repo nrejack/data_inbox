@@ -304,7 +304,7 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
         if error_code:
             conn.execute('INSERT INTO partner_run_status \
                 (code, partner, run_id) VALUES (?, ?, ?)', \
-                (error_code, partner['id'], current_run_id))``
+                (error_code, partner['id'], current_run_id))
 def make_partners_to_check_list(partner_info, conn, logger, current_run_id):
     """Generate list of partners to check"""
     partners_to_check = []
