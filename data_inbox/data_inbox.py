@@ -350,7 +350,12 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
             logger.debug("partner_fileset len: %i", len(partner_fileset))
             #logger.debug(partner_fileset)
             logger.info("Now checking new file %s", new_file)
-            file_extension = new_file.split('.')[1].lower()
+            try:
+                file_extension = new_file.split('.')[1].lower()
+            except IndexError:
+                logger.error("Unable to split file extension off file %s", new_file)
+                logger.error("File will not be checked.")
+                continue
             logger.debug("File extension: %s", file_extension)
             if file_extension in FILETYPES_TO_SKIP:
                 logger.debug("Not checking %s because it is in the list of \
