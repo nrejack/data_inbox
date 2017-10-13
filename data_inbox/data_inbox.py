@@ -506,7 +506,11 @@ def add_new_fileset(conn, logger):
                     list_of_files = os.listdir(new_dir)
                     for new_file in list_of_files:
                         with open(os.path.join(new_dir, new_file), 'r') as f:
-                            header = f.readline()
+                            try:
+                                header = f.readline()
+                            except UnicodeDecodeError:
+                                logger.info("UnicodeDecodeError: Unable to read header of file %s", new_file)
+                                continue
                         logger.info("Now trying to add file %s to fileset.", new_file)
                         guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
 
