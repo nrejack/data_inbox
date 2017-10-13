@@ -301,7 +301,17 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
                 partner['incoming_file_directory'], partner['name_full'])
             error_code = 1  # no files, therefore no new files
         else:
-            error_code = 3
+            # verify that at least one actual file is in the directory
+            all_dirs = True
+            for item in os.listdir(partner['incoming_file_directory']):
+                logger.debug("Now checking %s", item)
+                if os.path.isfile(os.path.join(partner['incoming_file_directory'], item)):
+                    logger.debug("not all dirs for %s", partner)
+                    all_dirs = False
+            if all_dirs:
+                error_code = 1
+            else:
+                error_code = 3
         if error_code:
             conn.execute('INSERT INTO partner_run_status \
                 (code, partner, run_id) VALUES (?, ?, ?)', \
