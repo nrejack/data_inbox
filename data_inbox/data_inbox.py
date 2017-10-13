@@ -14,6 +14,7 @@ import logging
 import sqlite3
 import shutil
 import os
+from datetime import date
 from subprocess import call
 
 import datetime
@@ -671,7 +672,7 @@ def check_header(new_file, partner_directory, prev_header, logger):
         elif len(header_cols) == starting_new_header_len:
             # if the length hasn't changed, assume header is missing in file
             logger.info("No columns from new header match old header.")
-            logger.info("Header may haven been deleted.")
+            logger.info("Header may have been deleted.")
             return [4]
         elif len(header_cols) != starting_new_header_len and \
             len(missing_header_cols) == 0:
@@ -742,7 +743,8 @@ def send_report(report, from_address, to_address, mail_server):
 def write_report(report, logger):
     """Write report out to a file so it can be sent later.
     """
-    with open('report.txt', 'w') as f:
+    report_file_name = str(date.today()).replace('-', '') + "report.txt"
+    with open(report_file_name, 'w') as f:
         for row in report:
             f.write(row)
     logger.debug("Finished writing report out.")
