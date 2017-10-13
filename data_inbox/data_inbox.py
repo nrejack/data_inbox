@@ -14,6 +14,7 @@ import logging
 import sqlite3
 import shutil
 import os
+from subprocess import call
 
 import datetime
 import click
@@ -31,7 +32,7 @@ FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip']
 MATCH_RATIO = 80
 
 FROM_EMAILS = 'please-do-not-reply@ufl.edu'
-TO_EMAILS = ''
+TO_EMAILS = 'nrejack@ufl.edu'
 MAIL_SERVER = 'smtp.ufl.edu'
 
 @click.option('-v', '--verbose', help='Run in verbose mode.', \
@@ -99,7 +100,7 @@ def main(verbose, create, buildfileset):
     # run file report
     report += run_file_report(conn, logger, current_run_id, partner_info)
 
-    #send_report(report, FROM_EMAILS, TO_EMAILS, MAIL_SERVER)
+    send_report(report, FROM_EMAILS, TO_EMAILS, MAIL_SERVER)
     print("*****************")
     print(report)
     print("*****************")
@@ -723,14 +724,17 @@ def send_report(report, from_address, to_address, mail_server):
     from_address -- email address the report will come from.
     to_address -- email address the report is going to.
     """
-    msg = MIMEText(report)
-    msg['Subject'] = \
-        "data_inbox report for " + str(datetime.datetime.now()) + "\n"
-    msg['From'] = from_address
-    msg['To'] = to_address
-    mail_connection = smtplib.SMTP(mail_server)
-    mail_connection.sendmail(from_address, to_address, msg.as_string())
-    mail_connection.quit()
+    subj = "data_inbox report for " + str(datetime.datetime.now()) + "\n"
+    call(["mailx", "-s {} {} < {}".format(subj, to_address, report)])
+    #msg['Subject'] = \
+    #    "data_inbox report for " + str(datetime.datetime.now()) + "\n"
+    #msg['From'] = from_address
+    #msg['To'] = to_address
+    #os.system('subj=%', "'data_inbox report for ' + str(datetime.datetime.now()) + '\n'""
+    #os.system("mail -s '$subj' BMI-DEVELOPERS@ad.ufl.edu < /dev/null
+    #mail_connection = smtplib.SMTP(mail_server)
+    #mail_connection.sendmail(from_address, to_address, msg.as_string())
+    #mail_connection.quit()
 
 if __name__ == '__main__':
     main()
