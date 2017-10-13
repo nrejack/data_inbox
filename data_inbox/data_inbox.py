@@ -491,19 +491,22 @@ def add_new_fileset(conn, logger):
             list_of_dirs = sorted(list_of_dirs, reverse=True)
             list_of_dirs_count = len(list_of_dirs)
             for new_dir in list_of_dirs:
-                get_out = input("There are {} remaining directories to scan " \
-                    "for {}. Do you wish to continue? (Y/N)" \
-                    .format(list_of_dirs_count, name))
-                list_of_dirs_count = list_of_dirs_count - 1
-                if get_out == 'N' or get_out == 'n':
-                    break
-                new_dir = directory + new_dir
-                list_of_files = os.listdir(new_dir)
-                for new_file in list_of_files:
-                    with open(os.path.join(new_dir, new_file), 'r') as f:
-                        header = f.readline()
-                    logger.info("Now trying to add file %s to fileset.", new_file)
-                    guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
+                if os.path.isdir(new_dir):
+                    get_out = input("There are {} remaining directories to scan " \
+                        "for {}. Do you wish to continue? (Y/N)" \
+                        .format(list_of_dirs_count, name))
+                    list_of_dirs_count = list_of_dirs_count - 1
+                    if get_out == 'N' or get_out == 'n':
+                        break
+                    new_dir = directory + new_dir
+                    list_of_files = os.listdir(new_dir)
+                    for new_file in list_of_files:
+                        with open(os.path.join(new_dir, new_file), 'r') as f:
+                            header = f.readline()
+                        logger.info("Now trying to add file %s to fileset.", new_file)
+                        guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
+                else:
+                    continue
 
 def get_filetype_dict(conn, logger):
     """Utility function that gets the dict of filetypes."""
