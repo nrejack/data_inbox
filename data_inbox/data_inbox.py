@@ -68,6 +68,7 @@ def main(verbose, create, buildfileset):
         for sql_file in [PARTNER_DATA_FILE, PARTNER_ERROR_CODES_DATA_FILE, \
                         FILE_ERROR_CODES_DATA_FILE, FILETYPES_DATA_FILE]:
             read_in_sql_files(os.path.join('sql', sql_file), logger, conn)
+    exit()
 
     # read list of partners from table
     # TODO: abstract the data access methods
@@ -144,7 +145,6 @@ def read_in_sql_files(sql_file, logger, conn):
     else:
         logger.info("Skipping reading in data.")
     commit_tran(conn, logger)
-    exit()
 
 def run_partner_report(conn, logger, current_run_id, partner_info):
     """Report status of current run."""
