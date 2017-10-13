@@ -495,7 +495,7 @@ def add_new_fileset(conn, logger):
                 #logger.debug(new_dir)
                 #logger.debug(os.path.isdir(os.path.join(directory + new_dir)))
                 if os.path.isdir(os.path.join(directory + new_dir)):
-                    print("HERE")
+                    #print("HERE")
                     get_out = input("There are {} remaining directories to scan " \
                         "for {}. Do you wish to continue? (Y/N)" \
                         .format(list_of_dirs_count, name))
