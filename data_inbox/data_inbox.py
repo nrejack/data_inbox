@@ -743,7 +743,7 @@ def send_report(report, from_address, to_address, mail_server):
 def write_report(report, logger):
     """Write report out to a file so it can be sent later.
     """
-    report_file_name = str(date.today()).replace('-', '') + "report.txt"
+    report_file_name = str(date.today()).replace('-', '') + "_report.txt"
     with open(report_file_name, 'w') as f:
         for row in report:
             f.write(row)
