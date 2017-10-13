@@ -351,11 +351,14 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
         for new_file in new_fileset:
             partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
             if not partner_fileset:
-                conn.execute("INSERT INTO file_run_status (code, partner, \
+                try:
+                    conn.execute("INSERT INTO file_run_status (code, partner, \
                     run_id, filename_pattern, filetype) \
                     VALUES (?, ?, ?, ?, ?)", (7, pid, current_run_id, \
-                    filename, "unknown"))
-                commit_tran(conn, logger)
+                    new_file, "unknown"))
+                    commit_tran(conn, logger)
+                except:
+                    logger.info("Unable to store file_run_status.")
                 return
             logger.debug("partner_fileset len: %i", len(partner_fileset))
             #logger.debug(partner_fileset)
