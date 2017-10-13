@@ -100,7 +100,8 @@ def main(verbose, create, buildfileset):
     # run file report
     report += run_file_report(conn, logger, current_run_id, partner_info)
 
-    send_report(report, FROM_EMAILS, TO_EMAILS, MAIL_SERVER)
+    #send_report(report, FROM_EMAILS, TO_EMAILS, MAIL_SERVER)
+    write_report(report, logger)
     print("*****************")
     print(report)
     print("*****************")
@@ -724,8 +725,10 @@ def send_report(report, from_address, to_address, mail_server):
     from_address -- email address the report will come from.
     to_address -- email address the report is going to.
     """
-    subj = "data_inbox report for " + str(datetime.datetime.now()) + "\n"
-    call(["mailx", "-s {} {} < {}".format(subj, to_address, report)])
+    #subj = "data_inbox report for " + str(datetime.datetime.now())
+    #mail_string = "-s " + "'" + subj + "'" + " " + to_address + " < " + "'" + report + "'"
+    #print(mail_string)
+    #call(["mail", mail_string])
     #msg['Subject'] = \
     #    "data_inbox report for " + str(datetime.datetime.now()) + "\n"
     #msg['From'] = from_address
@@ -735,6 +738,14 @@ def send_report(report, from_address, to_address, mail_server):
     #mail_connection = smtplib.SMTP(mail_server)
     #mail_connection.sendmail(from_address, to_address, msg.as_string())
     #mail_connection.quit()
+
+def write_report(report, logger):
+    """Write report out to a file so it can be sent later.
+    """
+    with open('report.txt', 'w') as f:
+        for row in report:
+            f.write(row)
+    logger.debug("Finished writing report out.")
 
 if __name__ == '__main__':
     main()
