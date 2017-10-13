@@ -68,7 +68,8 @@ def main(verbose, create, buildfileset):
         for sql_file in [PARTNER_DATA_FILE, PARTNER_ERROR_CODES_DATA_FILE, \
                         FILE_ERROR_CODES_DATA_FILE, FILETYPES_DATA_FILE]:
             read_in_sql_files(os.path.join('sql', sql_file), logger, conn)
-    exit()
+    if create:
+        exit()
 
     # read list of partners from table
     # TODO: abstract the data access methods
