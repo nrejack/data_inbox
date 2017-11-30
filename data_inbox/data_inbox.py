@@ -309,12 +309,14 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
             for item in os.listdir(partner['incoming_file_directory']):
                 logger.debug("Now checking %s", item)
                 if os.path.isfile(os.path.join(partner['incoming_file_directory'], item)):
-                    logger.debug("not all dirs for %s", partner)
                     all_dirs = False
             if all_dirs:
                 error_code = 1
+                logger.debug("all dirs for %s", partner)
             else:
                 error_code = 3
+                logger.debug("not all dirs for %s", partner)
+
         if error_code:
             conn.execute('INSERT INTO partner_run_status \
                 (code, partner, run_id) VALUES (?, ?, ?)', \
@@ -362,8 +364,8 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                     commit_tran(conn, logger)
                 except:
                     logger.info("Unable to store file_run_status.")
-                return
-            logger.debug("partner_fileset len: %i", len(partner_fileset))
+            else:
+                logger.debug("partner_fileset len: %i", len(partner_fileset))
             #logger.debug(partner_fileset)
             logger.info("Now checking new file %s", new_file)
             try:
@@ -401,7 +403,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                     logger.debug("new max score found:")
                     logger.debug(max_score)
 
-                logger.info("Continuing to attempt to match %s", new_file_trim)
+                logger.debug("Continuing to attempt to match %s", new_file_trim)
                 #if new == fname or new in fname \
                 #    or fuzz.ratio(new, fname) > MATCH_RATIO or new.find(fname) != -1:
 
@@ -684,6 +686,7 @@ def check_header(new_file, partner_directory, prev_header, logger):
             logger.info("Columns added and deleted")
             return [6, header_cols, missing_header_cols]
         else:
+            #TODO: trap here to check for addition
             logger.info("%s header does not match old header.", new_file)
             logger.info("New column(s) found: %s", header_cols)
             return [2, header_cols]
@@ -703,7 +706,7 @@ def configure_logging(verbose):
     logger.setLevel(logging.DEBUG)
     # logging to file
     file_handler_logger = logging.FileHandler('data_inbox.log')
-    file_handler_logger.setLevel(logging.DEBUG)
+    file_handler_logger.setLevel(logging.INFO)
     file_handler_logger.setFormatter(formatter)
     logger.addHandler(file_handler_logger)
 
