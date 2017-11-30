@@ -255,8 +255,8 @@ def run_file_report(conn, logger, current_run_id, partner_info):
                     partners_filesets to match.\n"\
                     .format(item['filename_pattern'])
             elif item['code'] == 6:
-                report += "{} has missing columns {} and new columns {}. Check \
-                before processing.\n".format(item['filename_pattern'], \
+                report += "{} has missing columns {} and new columns {}. Check" \
+                " before processing.\n".format(item['filename_pattern'], \
                 item['cols_del'], item['cols_add'])
             elif item['code'] == 7:
                 report += "No previous fileset stored for partner. " \
@@ -425,7 +425,12 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 status_and_cols = check_header(new_file, directory, max_score['header'], logger)
                 status = status_and_cols[0]
                 if len(status_and_cols) == 2:
-                    cols = status_and_cols[1]
+                    if status == 2:
+                        # there is a new column
+                        cols_add = status_and_cols[1]
+                    elif status == 3:
+                        # there is a deleted column
+                        cols_del = status_and_cols[1]
                 elif len(status_and_cols) == 3:
                     cols_add = status_and_cols[1]
                     cols_del = status_and_cols[2]
@@ -447,14 +452,14 @@ def get_status(status, pid, current_run_id, new_file, cols, cols_add, \
         conn.execute("INSERT INTO file_run_status (code, partner, \
             run_id, filename_pattern, filetype, cols_add) \
             VALUES (?, ?, ?, ?, ?, ?)", (2, pid, current_run_id, new_file, \
-            "unknown", str(cols)))
+            "unknown", str(cols_add)))
         return
     elif status == 3:
         logger.info("Storing deleted column status for {}".format(new_file))
         conn.execute("INSERT INTO file_run_status (code, partner, \
             run_id, filename_pattern, filetype, cols_del) \
             VALUES (?, ?, ?, ?, ?, ?)", (3, pid, current_run_id, \
-            new_file, "unknown", str(cols)))
+            new_file, "unknown", str(cols_del)))
         return
     elif status == 4:
         logger.info("Storing missing header status for {}".format(new_file))
@@ -487,7 +492,7 @@ def load_previous_fileset(conn, pid, logger, name_full):
             'filename_pattern': item['filename_pattern'], \
             'header': item['header']})
 
-    logger.info("Loading previous fileset for %s", name_full)
+    logger.debug("Loading previous fileset for %s", name_full)
     if len(partner_fileset) == 0:
         logger.warning("No previous recorded fileset stored for %s", name_full)
         logger.error('%s will not be checked in this run.', name_full)
@@ -680,9 +685,10 @@ def check_header(new_file, partner_directory, prev_header, logger):
             logger.info("Header may have been deleted.")
             return [4]
         elif len(header_cols) != starting_new_header_len and \
-            len(missing_header_cols) == 0:
+            len(missing_header_cols) != 0 and len(header_cols) == 0:
             # at least some columns matched
             logger.info("Columns deleted.")
+            #logger.debug("MISSING HEADER %s", missing_header_cols)
             return [3, missing_header_cols]
         elif len(header_cols) != 0 and len(missing_header_cols) != 0:
             # columns added and deleted
@@ -690,6 +696,8 @@ def check_header(new_file, partner_directory, prev_header, logger):
             return [6, header_cols, missing_header_cols]
         else:
             #TODO: trap here to check for addition
+            logger.info("HEADER COLS: %s starting_new_header_len: %s missing_header_cols: %s", header_cols, starting_new_header_len, missing_header_cols)
+
             logger.info("%s header does not match old header.", new_file)
             logger.info("New column(s) found: %s", header_cols)
             return [2, header_cols]
