@@ -94,10 +94,16 @@ def main(verbose, create, buildfileset):
     check_partner_dirs(partner_info, conn, logger, current_run_id)
 
     # report on partner results
-    report = run_partner_report(conn, logger, current_run_id, partner_info)
+    temp_report = run_partner_report(conn, logger, current_run_id, partner_info)
 
     # check partner files for headers
     check_partner_files(partner_info, conn, logger, current_run_id)
+
+    # generate exception report
+    report = generate_exception_report(conn, logger, current_run_id, partner_info)
+
+    # add the partner results after the exception
+    report += temp_report
 
     # run file report
     report += run_file_report(conn, logger, current_run_id, partner_info)
@@ -155,9 +161,7 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     """Report status of current run."""
     output_report = ""
     logger.debug("Current run status")
-    output_report += "OneFlorida Data Trust partner file check for " \
-        + str(datetime.datetime.now()) \
-        + "\n\n\nPartner-level summaries\n-----------------------\n\n"
+    output_report = "\n\n\nPartner-level summaries\n-----------------------\n\n"
     no_new_data = "No new data\n--------------------\n"
     no_new_data_initial_len = len(no_new_data)
     dir_not_found = "Directory not found\n--------------------\n"
@@ -166,6 +170,8 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     new_files_initial_len = len(new_files)
     not_checked = "Not checked\n--------------------\n"
     not_checked_initial_len = len(not_checked)
+    #logger.debug("Checking for violations.")
+    #generate_violation_report(partner_info, conn, logger, current_run_id)
 
     #logger.debug(partner_info)
     report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=?", \
@@ -213,8 +219,37 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
 
     return output_report
 
-def run_file_report(conn, logger, current_run_id, partner_info):
-    report = "\n\n\nDetailed report\n--------------------\n\n"
+def generate_exception_report(conn, logger, current_run_id, partner_info):
+    """Generate exception report."""
+    logger.info("Starting exception report.")
+    report = "OneFlorida Data Trust partner file check for " \
+            + str(datetime.datetime.now())
+    report += "\n\n\n :: Exceptions ::\n--------------------\n"
+    # # get list of partners to check
+    # partner_list = []
+    # partners_to_check = conn.execute("SELECT partner FROM partner_run_status WHERE code = 3 AND run_id=?", \
+    #     (str(current_run_id),))
+    # for item in partners_to_check:
+    #     partner_list.append(item['partner'])
+    # if len(partner_list) == 0:
+    #     report += "None noted.\n"
+    #     return report
+    # else:
+    #     for partner in partner_list:
+    #         file_list = conn.execute("SELECT code, partner, run_id, \
+    #             filename_pattern, cols_add, cols_del FROM file_run_status WHERE \
+    #             run_id = ? AND partner = ?", (int(current_run_id), partner))
+    #         for current_file in file_problems:
+    #             if current_file['code'] != 1:
+    #                 print("problem found: %s", get_file_status)
+    #     return report
+    report += run_file_report(conn, logger, current_run_id, partner_info, detailed = False)
+    return report
+
+def run_file_report(conn, logger, current_run_id, partner_info, detailed = True):
+    report = ""
+    if detailed == True:
+        report = "\n\n\nDetailed report\n--------------------\n\n"
     # first get list of partners we need to report on
     partner_list = conn.execute("SELECT partner FROM partner_run_status \
         WHERE code = 3 AND run_id = ?", (str(current_run_id),))
@@ -229,46 +264,53 @@ def run_file_report(conn, logger, current_run_id, partner_info):
             run_id = ? AND partner = ?", (int(current_run_id), partner_code))
         do_once = True
         for item in file_list:
+            # if we're doing a basic report, skip reporting on files where nothing changed
+            if item['code'] == 1 and detailed == False:
+                continue
             while do_once:
                 report += partner_name['name_full'] +"\n"
                 report += "-----------------------\n"
                 do_once = False
             logger.debug("Partner %s %s ", partner_code, partner_name)
             logger.debug(item)
-            if item['code'] == 1:
-                report += "{} has no change in header. OK to process.\n" \
-                    .format(item['filename_pattern'])
-            elif item['code'] == 2:
-                report += "{} has a new column {}. Check before processing.\n" \
-                    .format(item['filename_pattern'], item['cols_add'])
-            elif item['code'] == 3:
-                report += "{} is missing previously existing column(s) {}. " \
-                    "Check before processing.\n"\
-                    .format(item['filename_pattern'], item['cols_del'])
-            elif item['code'] == 4:
-                report += "{} may be missing a header. No previous column names" \
-                    " matched. Check before processing.\n"\
-                    .format(item['filename_pattern'])
-            #TODO does this ever get triggered?
-            elif item['code'] == 5:
-                report += "{} is a new or unidentified filetype. Update \
-                    partners_filesets to match.\n"\
-                    .format(item['filename_pattern'])
-            elif item['code'] == 6:
-                report += "{} has missing columns {} and new columns {}. Check" \
-                " before processing.\n".format(item['filename_pattern'], \
-                item['cols_del'], item['cols_add'])
-            elif item['code'] == 7:
-                report += "No previous fileset stored for partner. " \
-                "Header(s) have not been checked.\n"
+            report += get_file_status(logger, item['code'], item)
 
         do_once = True
         while do_once:
             report += "\n"
             do_once = False
-
-    report += "\nThis report generated by version {} of data_inbox.".format(VERSION_NUMBER)
+    if detailed == True:
+        report += "\nThis report generated by version {} of data_inbox.".format(VERSION_NUMBER)
     return report
+
+def get_file_status(logger, code, item):
+    """Helper function to return text describing what happened to a file."""
+    if code == 1:
+        return "{} has no change in header. OK to process.\n" \
+            .format(item['filename_pattern'])
+    elif code == 2:
+        return "{} has a new column {}. Check before processing.\n" \
+            .format(item['filename_pattern'], item['cols_add'])
+    elif code == 3:
+        return "{} is missing previously existing column(s) {}. " \
+            "Check before processing.\n"\
+            .format(item['filename_pattern'], item['cols_del'])
+    elif code == 4:
+        return "{} may be missing a header. No previous column names" \
+            " matched. Check before processing.\n"\
+            .format(item['filename_pattern'])
+    #TODO does this ever get triggered?
+    elif code == 5:
+        return "{} is a new or unidentified filetype. Update \
+            partners_filesets to match.\n"\
+            .format(item['filename_pattern'])
+    elif code == 6:
+        return "{} has missing columns {} and new columns {}. Check" \
+        " before processing.\n".format(item['filename_pattern'], \
+        item['cols_del'], item['cols_add'])
+    elif code == 7:
+        return "No previous fileset stored for partner. " \
+        "Header(s) have not been checked.\n"
 
 def setup_tables(conn, logger):
     create_sql = input("Do you wish to create the needed SQL tables? (y/n) ")
@@ -342,6 +384,19 @@ def make_partners_to_check_list(partner_info, conn, logger, current_run_id):
             partners_to_check.append({'id':partner_id, \
                 'name_full':partner_name, 'dir':partner_directory})
     return partners_to_check
+
+#def generate_violation_report(partner_info, conn, logger, current_run_id):
+    # """Report if there are any violations."""
+    # partners_to_check = []
+    # list_of_partners_with_new = []
+    # report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=? and code=3", (int(current_run_id),))
+    # # build list of partner ids to check
+    # for row in report:
+    #     list_of_partners_with_new.append(row['partner'])
+    # for partner_code in list_of_partners_with_new:
+    #     report = conn.execute("SELECT * FROM file_run_status WHERE run_id=? and partner=?", (int(current_run_id),int(partner_code)))
+    # for row in report:
+    #     print(row)
 
 def check_partner_files(partner_info, conn, logger, current_run_id):
     """Iterate over files for each partner to check their headers."""
