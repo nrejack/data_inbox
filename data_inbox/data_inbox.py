@@ -161,7 +161,7 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     """Report status of current run."""
     output_report = ""
     logger.debug("Current run status")
-    output_report = "\n\n\nPartner-level summaries\n-----------------------\n\n"
+    output_report = "\nPartner-level summaries\n-----------------------\n\n"
     no_new_data = "No new data\n--------------------\n"
     no_new_data_initial_len = len(no_new_data)
     dir_not_found = "Directory not found\n--------------------\n"
@@ -224,7 +224,7 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     logger.info("Starting exception report.")
     report = "OneFlorida Data Trust partner file check for " \
             + str(datetime.datetime.now())
-    report += "\n\n\n :: Exceptions ::\n--------------------\n"
+    report += "\n\n :: Exceptions ::\n--------------------"
     # # get list of partners to check
     # partner_list = []
     # partners_to_check = conn.execute("SELECT partner FROM partner_run_status WHERE code = 3 AND run_id=?", \
@@ -249,7 +249,7 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
 def run_file_report(conn, logger, current_run_id, partner_info, detailed = True):
     report = ""
     if detailed == True:
-        report = "\n\n\nDetailed report\n--------------------\n\n"
+        report = "\n\nDetailed report\n--------------------\n\n"
     # first get list of partners we need to report on
     partner_list = conn.execute("SELECT partner FROM partner_run_status \
         WHERE code = 3 AND run_id = ?", (str(current_run_id),))
