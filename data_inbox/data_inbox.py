@@ -244,6 +244,8 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     #                 print("problem found: %s", get_file_status)
     #     return report
     report += run_file_report(conn, logger, current_run_id, partner_info, detailed = False)
+    if len(report) == 0:
+        report += "None noted."
     return report
 
 def run_file_report(conn, logger, current_run_id, partner_info, detailed = True):
