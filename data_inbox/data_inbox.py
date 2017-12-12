@@ -421,8 +421,8 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 continue
             logger.debug("File extension: %s", file_extension)
             if file_extension in FILETYPES_TO_SKIP:
-                logger.debug("Not checking %s because it is in the list of \
-                    filetypes to skip.", new_file)
+                logger.debug("Not checking %s because it is in the list of " \
+                    "filetypes to skip.", new_file)
                 continue
             # find a match
             # search the fileset to find a matching filename
@@ -701,7 +701,11 @@ def check_header(new_file, partner_directory, prev_header, logger):
     # TODO: make this work on non-exact matching
     logger.info("Now checking header for %s", new_file)
     with open(partner_directory + new_file, 'r') as f:
-        header_row = f.readline().strip()
+        try:
+            header_row = f.readline().strip()
+        except UnicodeDecodeError:
+            logger.error("Can't decode file. Not a text file.")
+            return [0, '']
 
         logger.debug("Header for file %s:\n%s", new_file, header_row.strip())
         header_cols, delim = find_delim_and_split(header_row, logger)
