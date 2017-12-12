@@ -587,11 +587,13 @@ def add_new_fileset(conn, logger):
                 if os.path.isdir(os.path.join(directory + new_dir)):
                     #print("HERE")
                     get_out = input("There are {} remaining directories to scan " \
-                        "for {}. Do you wish to continue? (Y/N)" \
-                        .format(list_of_dirs_count, name))
+                        "for {}. The next directory is {}. Do you wish to continue? (Y/N). \nEnter (s) to skip scanning the next directory." \
+                        .format(list_of_dirs_count, new_dir, name))
                     list_of_dirs_count = list_of_dirs_count - 1
                     if get_out == 'N' or get_out == 'n':
                         break
+                    if get_out == "S" or get_out == 's':
+                        continue
                     new_dir = directory + new_dir
                     list_of_files = os.listdir(new_dir)
                     for new_file in list_of_files:
@@ -604,6 +606,8 @@ def add_new_fileset(conn, logger):
                                     continue
                             logger.info("Now trying to add file %s to fileset.", new_file)
                             guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
+                else:
+                    logger.info("No directories found for {}.".format(name))
 
 def get_filetype_dict(conn, logger):
     """Utility function that gets the dict of filetypes."""
