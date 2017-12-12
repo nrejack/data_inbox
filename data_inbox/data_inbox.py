@@ -225,24 +225,6 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     report = "OneFlorida Data Trust partner file check for " \
             + str(datetime.datetime.now())
     report += "\n\n :: Exceptions ::\n--------------------"
-    # # get list of partners to check
-    # partner_list = []
-    # partners_to_check = conn.execute("SELECT partner FROM partner_run_status WHERE code = 3 AND run_id=?", \
-    #     (str(current_run_id),))
-    # for item in partners_to_check:
-    #     partner_list.append(item['partner'])
-    # if len(partner_list) == 0:
-    #     report += "None noted.\n"
-    #     return report
-    # else:
-    #     for partner in partner_list:
-    #         file_list = conn.execute("SELECT code, partner, run_id, \
-    #             filename_pattern, cols_add, cols_del FROM file_run_status WHERE \
-    #             run_id = ? AND partner = ?", (int(current_run_id), partner))
-    #         for current_file in file_problems:
-    #             if current_file['code'] != 1:
-    #                 print("problem found: %s", get_file_status)
-    #     return report
     report += run_file_report(conn, logger, current_run_id, partner_info, detailed = False)
     print(len(report))
     if len(report) == 0:
@@ -586,9 +568,9 @@ def add_new_fileset(conn, logger):
                 #logger.debug(os.path.isdir(os.path.join(directory + new_dir)))
                 if os.path.isdir(os.path.join(directory + new_dir)):
                     #print("HERE")
-                    get_out = input("There are {} remaining directories to scan " \
-                        "for {}. The next directory is {}. Do you wish to continue? (Y/N). \nEnter (s) to skip scanning the next directory." \
-                        .format(list_of_dirs_count, new_dir, name))
+                    get_out = input("\nThere are {} remaining directories to scan " \
+                        "for {}. The next directory is {}.\nDo you wish to continue? (Y/N). Enter (S) to skip scanning the next directory. " \
+                        .format(list_of_dirs_count, name, new_dir))
                     list_of_dirs_count = list_of_dirs_count - 1
                     if get_out == 'N' or get_out == 'n':
                         break
@@ -607,7 +589,7 @@ def add_new_fileset(conn, logger):
                             logger.info("Now trying to add file %s to fileset.", new_file)
                             guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
                 else:
-                    logger.info("No directories found for {}.".format(name))
+                    logger.info("{} is not a directory. Skipping for {}.".format(new_dir, name))
 
 def get_filetype_dict(conn, logger):
     """Utility function that gets the dict of filetypes."""
@@ -675,7 +657,7 @@ def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
     except:
         logger.debug("No previous record found.")
     if existing_filetype_row and int(filetype_id) != 31:
-        logger.info("Existing filetype record found for partner %s and" \
+        logger.info("Existing filetype record found for partner %s and " \
             "filetype %i", partner, filetype_id)
         logger.info("Deleting previous filetype records from partners_filesets")
         delete_tran = conn.execute("DELETE FROM partners_filesets \
