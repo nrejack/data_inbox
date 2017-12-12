@@ -29,7 +29,7 @@ FILE_ERROR_CODES_DATA_FILE = 'file_error_codes.sql'
 FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
-FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip']
+FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip', 'jpeg', 'jpg']
 # set the minimum match ratio for fuzzy matching
 MATCH_RATIO = 80
 
@@ -244,6 +244,7 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     #                 print("problem found: %s", get_file_status)
     #     return report
     report += run_file_report(conn, logger, current_run_id, partner_info, detailed = False)
+    print(len(report))
     if len(report) == 0:
         report += "None noted."
     return report
@@ -422,6 +423,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                     VALUES (?, ?, ?, ?, ?)", (7, pid, current_run_id, \
                     new_file, "unknown"))
                     commit_tran(conn, logger)
+                    break
                 except:
                     logger.info("Unable to store file_run_status.")
             else:
@@ -553,7 +555,7 @@ def load_previous_fileset(conn, pid, logger, name_full):
     if len(partner_fileset) == 0:
         logger.warning("No previous recorded fileset stored for %s", name_full)
         logger.error('%s will not be checked in this run.', name_full)
-        return
+        return False
     #else:
         #logger.debug(partner_fileset)
     return partner_fileset
@@ -696,16 +698,15 @@ def split_on_delim(line, delim):
 
 def find_delim_and_split(line, logger):
     """Given a string, try splitting it until you find the correct delimiter"""
-    delim = ','
-    line_split = split_on_delim(line, delim)
-    if len(line_split) == 1:
-        delim = ';'
+    delims = [',', ';', '\t', '|']
+    for delim in delims:
         line_split = split_on_delim(line, delim)
-        if len(line_split) == 1:
-            delim = '\t'
-            line_split = split_on_delim(line, delim)
-            if len(line_split) == 1:
-                logger.error("Couldn't find correct delimiter to split %s", line)
+        if len(line_split) != 1:
+            break
+        else:
+            continue
+    if len(line_split) == 1:
+        logger.error("Couldn't find correct delimiter to split %s", line)
     return line_split, delim
 
 def check_header(new_file, partner_directory, prev_header, logger):
@@ -753,7 +754,7 @@ def check_header(new_file, partner_directory, prev_header, logger):
             return [6, header_cols, missing_header_cols]
         else:
             #TODO: trap here to check for addition
-            logger.info("HEADER COLS: %s starting_new_header_len: %s missing_header_cols: %s", header_cols, starting_new_header_len, missing_header_cols)
+            logger.info("new header cols: %s starting_new_header_len: %s missing_header_cols: %s", header_cols, starting_new_header_len, missing_header_cols)
 
             logger.info("%s header does not match old header.", new_file)
             logger.info("New column(s) found: %s", header_cols)
