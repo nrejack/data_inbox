@@ -260,6 +260,8 @@ def run_file_report(conn, logger, current_run_id, partner_info, detailed = True)
             logger.debug("Partner %s %s ", partner_code, partner_name)
             logger.debug(item)
             report += get_file_status(logger, item['code'], item)
+            if not detailed:
+                report += "\n"
 
         do_once = True
         while do_once:
