@@ -14,24 +14,27 @@ import logging
 import sqlite3
 import shutil
 import os
+from datetime import date
+from subprocess import call
 
 import datetime
 import click
 import fileset_db
 from fuzzywuzzy import fuzz
 
+VERSION_NUMBER = '0.2'
 PARTNER_DATA_FILE = 'partner_data.sql'
 PARTNER_ERROR_CODES_DATA_FILE = 'partner_error_codes.sql'
 FILE_ERROR_CODES_DATA_FILE = 'file_error_codes.sql'
 FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
-FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip']
+FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip', 'jpeg', 'jpg']
 # set the minimum match ratio for fuzzy matching
 MATCH_RATIO = 80
 
 FROM_EMAILS = 'please-do-not-reply@ufl.edu'
-TO_EMAILS = ''
+TO_EMAILS = 'nrejack@ufl.edu'
 MAIL_SERVER = 'smtp.ufl.edu'
 
 @click.option('-v', '--verbose', help='Run in verbose mode.', \
@@ -68,6 +71,8 @@ def main(verbose, create, buildfileset):
         for sql_file in [PARTNER_DATA_FILE, PARTNER_ERROR_CODES_DATA_FILE, \
                         FILE_ERROR_CODES_DATA_FILE, FILETYPES_DATA_FILE]:
             read_in_sql_files(os.path.join('sql', sql_file), logger, conn)
+    if create:
+        exit()
 
     # read list of partners from table
     # TODO: abstract the data access methods
@@ -89,15 +94,22 @@ def main(verbose, create, buildfileset):
     check_partner_dirs(partner_info, conn, logger, current_run_id)
 
     # report on partner results
-    report = run_partner_report(conn, logger, current_run_id, partner_info)
+    temp_report = run_partner_report(conn, logger, current_run_id, partner_info)
 
     # check partner files for headers
     check_partner_files(partner_info, conn, logger, current_run_id)
+
+    # generate exception report
+    report = generate_exception_report(conn, logger, current_run_id, partner_info)
+
+    # add the partner results after the exception
+    report += temp_report
 
     # run file report
     report += run_file_report(conn, logger, current_run_id, partner_info)
 
     #send_report(report, FROM_EMAILS, TO_EMAILS, MAIL_SERVER)
+    write_report(report, logger)
     print("*****************")
     print(report)
     print("*****************")
@@ -144,15 +156,12 @@ def read_in_sql_files(sql_file, logger, conn):
     else:
         logger.info("Skipping reading in data.")
     commit_tran(conn, logger)
-    exit()
 
 def run_partner_report(conn, logger, current_run_id, partner_info):
     """Report status of current run."""
     output_report = ""
     logger.debug("Current run status")
-    output_report += "OneFlorida Data Trust partner file check for " \
-        + str(datetime.datetime.now()) \
-        + "\n\n\nPartner-level summaries\n-----------------------\n\n"
+    output_report = "\nPartner-level summaries\n-----------------------\n\n"
     no_new_data = "No new data\n--------------------\n"
     no_new_data_initial_len = len(no_new_data)
     dir_not_found = "Directory not found\n--------------------\n"
@@ -161,6 +170,8 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
     new_files_initial_len = len(new_files)
     not_checked = "Not checked\n--------------------\n"
     not_checked_initial_len = len(not_checked)
+    #logger.debug("Checking for violations.")
+    #generate_violation_report(partner_info, conn, logger, current_run_id)
 
     #logger.debug(partner_info)
     report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=?", \
@@ -208,8 +219,23 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
 
     return output_report
 
-def run_file_report(conn, logger, current_run_id, partner_info):
-    report = "\n\n\nDetailed report\n--------------------\n\n"
+def generate_exception_report(conn, logger, current_run_id, partner_info):
+    """Generate exception report."""
+    logger.info("Starting exception report.")
+    report = "OneFlorida Data Trust partner file check for " \
+            + str(datetime.datetime.now())
+    report += "\n\n :: Exceptions ::\n--------------------\n"
+    initial_report_len = len(report)
+    report += run_file_report(conn, logger, current_run_id, partner_info, detailed = False)
+    print(len(report))
+    if len(report) == initial_report_len:
+        report += "None noted.\n\n"
+    return report
+
+def run_file_report(conn, logger, current_run_id, partner_info, detailed = True):
+    report = ""
+    if detailed == True:
+        report = "\n\nDetailed report\n--------------------\n\n"
     # first get list of partners we need to report on
     partner_list = conn.execute("SELECT partner FROM partner_run_status \
         WHERE code = 3 AND run_id = ?", (str(current_run_id),))
@@ -224,44 +250,53 @@ def run_file_report(conn, logger, current_run_id, partner_info):
             run_id = ? AND partner = ?", (int(current_run_id), partner_code))
         do_once = True
         for item in file_list:
+            # if we're doing a basic report, skip reporting on files where nothing changed
+            if item['code'] == 1 and detailed == False:
+                continue
             while do_once:
                 report += partner_name['name_full'] +"\n"
                 report += "-----------------------\n"
                 do_once = False
             logger.debug("Partner %s %s ", partner_code, partner_name)
             logger.debug(item)
-            if item['code'] == 1:
-                report += "{} has no change in header. OK to process.\n" \
-                    .format(item['filename_pattern'])
-            elif item['code'] == 2:
-                report += "{} has a new column {}. Check before processing.\n" \
-                    .format(item['filename_pattern'], item['cols_add'])
-            elif item['code'] == 3:
-                report += "{} is missing previously existing column(s) {}. " \
-                    "Check before processing.\n"\
-                    .format(item['filename_pattern'], item['cols_del'])
-            elif item['code'] == 4:
-                report += "{} may be missing a header. No previous column names" \
-                    " matched. Check before processing.\n"\
-                    .format(item['filename_pattern'])
-            #TODO does this ever get triggered?
-            elif item['code'] == 5:
-                report += "{} is a new or unidentified filetype. Update \
-                    partners_filesets to match.\n"\
-                    .format(item['filename_pattern'])
-            elif item['code'] == 6:
-                report += "{} has missing columns {} and new columns {}. Check \
-                before processing.\n".format(item['filename_pattern'], \
-                item['cols_del'], item['cols_add'])
-            elif item['code'] == 7:
-                report += "No previous fileset stored for partner. " \
-                "Header(s) have not been checked.\n"
+            report += get_file_status(logger, item['code'], item)
 
         do_once = True
         while do_once:
             report += "\n"
             do_once = False
+    if detailed == True:
+        report += "\nThis report generated by version {} of data_inbox.".format(VERSION_NUMBER)
     return report
+
+def get_file_status(logger, code, item):
+    """Helper function to return text describing what happened to a file."""
+    if code == 1:
+        return "{} has no change in header. OK to process.\n" \
+            .format(item['filename_pattern'])
+    elif code == 2:
+        return "{} has a new column {}. Check before processing.\n" \
+            .format(item['filename_pattern'], item['cols_add'])
+    elif code == 3:
+        return "{} is missing previously existing column(s) {}. " \
+            "Check before processing.\n"\
+            .format(item['filename_pattern'], item['cols_del'])
+    elif code == 4:
+        return "{} may be missing a header. No previous column names" \
+            " matched. Check before processing.\n"\
+            .format(item['filename_pattern'])
+    #TODO does this ever get triggered?
+    elif code == 5:
+        return "{} is a new or unidentified filetype. Update \
+            partners_filesets to match.\n"\
+            .format(item['filename_pattern'])
+    elif code == 6:
+        return "{} has missing columns {} and new columns {}. Check" \
+        " before processing.\n".format(item['filename_pattern'], \
+        item['cols_del'], item['cols_add'])
+    elif code == 7:
+        return "No previous fileset stored for partner. " \
+        "Header(s) have not been checked.\n"
 
 def setup_tables(conn, logger):
     create_sql = input("Do you wish to create the needed SQL tables? (y/n) ")
@@ -300,7 +335,19 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
                 partner['incoming_file_directory'], partner['name_full'])
             error_code = 1  # no files, therefore no new files
         else:
-            error_code = 3
+            # verify that at least one actual file is in the directory
+            all_dirs = True
+            for item in os.listdir(partner['incoming_file_directory']):
+                logger.debug("Now checking %s", item)
+                if os.path.isfile(os.path.join(partner['incoming_file_directory'], item)):
+                    all_dirs = False
+            if all_dirs:
+                error_code = 1
+                logger.debug("all dirs for %s", partner)
+            else:
+                error_code = 3
+                logger.debug("not all dirs for %s", partner)
+
         if error_code:
             conn.execute('INSERT INTO partner_run_status \
                 (code, partner, run_id) VALUES (?, ?, ?)', \
@@ -324,6 +371,19 @@ def make_partners_to_check_list(partner_info, conn, logger, current_run_id):
                 'name_full':partner_name, 'dir':partner_directory})
     return partners_to_check
 
+#def generate_violation_report(partner_info, conn, logger, current_run_id):
+    # """Report if there are any violations."""
+    # partners_to_check = []
+    # list_of_partners_with_new = []
+    # report = conn.execute("SELECT * FROM partner_run_status WHERE run_id=? and code=3", (int(current_run_id),))
+    # # build list of partner ids to check
+    # for row in report:
+    #     list_of_partners_with_new.append(row['partner'])
+    # for partner_code in list_of_partners_with_new:
+    #     report = conn.execute("SELECT * FROM file_run_status WHERE run_id=? and partner=?", (int(current_run_id),int(partner_code)))
+    # for row in report:
+    #     print(row)
+
 def check_partner_files(partner_info, conn, logger, current_run_id):
     """Iterate over files for each partner to check their headers."""
     logger.debug("Checking partner files")
@@ -340,20 +400,29 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
         for new_file in new_fileset:
             partner_fileset = load_previous_fileset(conn, pid, logger, name_full)
             if not partner_fileset:
-                conn.execute("INSERT INTO file_run_status (code, partner, \
+                try:
+                    conn.execute("INSERT INTO file_run_status (code, partner, \
                     run_id, filename_pattern, filetype) \
                     VALUES (?, ?, ?, ?, ?)", (7, pid, current_run_id, \
-                    filename, "unknown"))
-                commit_tran(conn, logger)
-                return
-            logger.debug("partner_fileset len: %i", len(partner_fileset))
+                    new_file, "unknown"))
+                    commit_tran(conn, logger)
+                    break
+                except:
+                    logger.info("Unable to store file_run_status.")
+            else:
+                logger.debug("partner_fileset len: %i", len(partner_fileset))
             #logger.debug(partner_fileset)
             logger.info("Now checking new file %s", new_file)
-            file_extension = new_file.split('.')[1].lower()
+            try:
+                file_extension = new_file.split('.')[1].lower()
+            except IndexError:
+                logger.error("Unable to split file extension off file %s", new_file)
+                logger.error("File will not be checked.")
+                continue
             logger.debug("File extension: %s", file_extension)
             if file_extension in FILETYPES_TO_SKIP:
-                logger.debug("Not checking %s because it is in the list of \
-                    filetypes to skip.", new_file)
+                logger.debug("Not checking %s because it is in the list of " \
+                    "filetypes to skip.", new_file)
                 continue
             # find a match
             # search the fileset to find a matching filename
@@ -379,7 +448,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                     logger.debug("new max score found:")
                     logger.debug(max_score)
 
-                logger.info("Continuing to attempt to match %s", new_file_trim)
+                logger.debug("Continuing to attempt to match %s", new_file_trim)
                 #if new == fname or new in fname \
                 #    or fuzz.ratio(new, fname) > MATCH_RATIO or new.find(fname) != -1:
 
@@ -398,7 +467,12 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 status_and_cols = check_header(new_file, directory, max_score['header'], logger)
                 status = status_and_cols[0]
                 if len(status_and_cols) == 2:
-                    cols = status_and_cols[1]
+                    if status == 2:
+                        # there is a new column
+                        cols_add = status_and_cols[1]
+                    elif status == 3:
+                        # there is a deleted column
+                        cols_del = status_and_cols[1]
                 elif len(status_and_cols) == 3:
                     cols_add = status_and_cols[1]
                     cols_del = status_and_cols[2]
@@ -420,14 +494,14 @@ def get_status(status, pid, current_run_id, new_file, cols, cols_add, \
         conn.execute("INSERT INTO file_run_status (code, partner, \
             run_id, filename_pattern, filetype, cols_add) \
             VALUES (?, ?, ?, ?, ?, ?)", (2, pid, current_run_id, new_file, \
-            "unknown", str(cols)))
+            "unknown", str(cols_add)))
         return
     elif status == 3:
         logger.info("Storing deleted column status for {}".format(new_file))
         conn.execute("INSERT INTO file_run_status (code, partner, \
             run_id, filename_pattern, filetype, cols_del) \
             VALUES (?, ?, ?, ?, ?, ?)", (3, pid, current_run_id, \
-            new_file, "unknown", str(cols)))
+            new_file, "unknown", str(cols_del)))
         return
     elif status == 4:
         logger.info("Storing missing header status for {}".format(new_file))
@@ -460,11 +534,11 @@ def load_previous_fileset(conn, pid, logger, name_full):
             'filename_pattern': item['filename_pattern'], \
             'header': item['header']})
 
-    logger.info("Loading previous fileset for %s", name_full)
+    logger.debug("Loading previous fileset for %s", name_full)
     if len(partner_fileset) == 0:
         logger.warning("No previous recorded fileset stored for %s", name_full)
         logger.error('%s will not be checked in this run.', name_full)
-        return
+        return False
     #else:
         #logger.debug(partner_fileset)
     return partner_fileset
@@ -491,19 +565,32 @@ def add_new_fileset(conn, logger):
             list_of_dirs = sorted(list_of_dirs, reverse=True)
             list_of_dirs_count = len(list_of_dirs)
             for new_dir in list_of_dirs:
-                get_out = input("There are {} remaining directories to scan " \
-                    "for {}. Do you wish to continue? (Y/N)" \
-                    .format(list_of_dirs_count, name))
-                list_of_dirs_count = list_of_dirs_count - 1
-                if get_out == 'N' or get_out == 'n':
-                    break
-                new_dir = directory + new_dir
-                list_of_files = os.listdir(new_dir)
-                for new_file in list_of_files:
-                    with open(os.path.join(new_dir, new_file), 'r') as f:
-                        header = f.readline()
-                    logger.info("Now trying to add file %s to fileset.", new_file)
-                    guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
+                #logger.debug(new_dir)
+                #logger.debug(os.path.isdir(os.path.join(directory + new_dir)))
+                if os.path.isdir(os.path.join(directory + new_dir)):
+                    #print("HERE")
+                    get_out = input("\nThere are {} remaining directories to scan " \
+                        "for {}. The next directory is {}.\nDo you wish to continue? (Y/N). Enter (S) to skip scanning the next directory. " \
+                        .format(list_of_dirs_count, name, new_dir))
+                    list_of_dirs_count = list_of_dirs_count - 1
+                    if get_out == 'N' or get_out == 'n':
+                        break
+                    if get_out == "S" or get_out == 's':
+                        continue
+                    new_dir = directory + new_dir
+                    list_of_files = os.listdir(new_dir)
+                    for new_file in list_of_files:
+                        if os.path.isfile(os.path.join(new_dir, new_file)):
+                            with open(os.path.join(new_dir, new_file), 'r') as f:
+                                try:
+                                    header = f.readline()
+                                except UnicodeDecodeError:
+                                    logger.info("UnicodeDecodeError: Unable to read header of file %s", new_file)
+                                    continue
+                            logger.info("Now trying to add file %s to fileset.", new_file)
+                            guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
+                else:
+                    logger.info("{} is not a directory. Skipping for {}.".format(new_dir, name))
 
 def get_filetype_dict(conn, logger):
     """Utility function that gets the dict of filetypes."""
@@ -571,7 +658,7 @@ def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
     except:
         logger.debug("No previous record found.")
     if existing_filetype_row and int(filetype_id) != 31:
-        logger.info("Existing filetype record found for partner %s and" \
+        logger.info("Existing filetype record found for partner %s and " \
             "filetype %i", partner, filetype_id)
         logger.info("Deleting previous filetype records from partners_filesets")
         delete_tran = conn.execute("DELETE FROM partners_filesets \
@@ -598,16 +685,15 @@ def split_on_delim(line, delim):
 
 def find_delim_and_split(line, logger):
     """Given a string, try splitting it until you find the correct delimiter"""
-    delim = ','
-    line_split = split_on_delim(line, delim)
-    if len(line_split) == 1:
-        delim = ';'
+    delims = [',', ';', '\t', '|']
+    for delim in delims:
         line_split = split_on_delim(line, delim)
-        if len(line_split) == 1:
-            delim = '\t'
-            line_split = split_on_delim(line, delim)
-            if len(line_split) == 1:
-                logger.error("Couldn't find correct delimiter to split %s", line)
+        if len(line_split) != 1:
+            break
+        else:
+            continue
+    if len(line_split) == 1:
+        logger.error("Couldn't find correct delimiter to split %s", line)
     return line_split, delim
 
 def check_header(new_file, partner_directory, prev_header, logger):
@@ -615,7 +701,11 @@ def check_header(new_file, partner_directory, prev_header, logger):
     # TODO: make this work on non-exact matching
     logger.info("Now checking header for %s", new_file)
     with open(partner_directory + new_file, 'r') as f:
-        header_row = f.readline().strip()
+        try:
+            header_row = f.readline().strip()
+        except UnicodeDecodeError:
+            logger.error("Can't decode file. Not a text file.")
+            return [0, '']
 
         logger.debug("Header for file %s:\n%s", new_file, header_row.strip())
         header_cols, delim = find_delim_and_split(header_row, logger)
@@ -641,18 +731,22 @@ def check_header(new_file, partner_directory, prev_header, logger):
         elif len(header_cols) == starting_new_header_len:
             # if the length hasn't changed, assume header is missing in file
             logger.info("No columns from new header match old header.")
-            logger.info("Header may haven been deleted.")
+            logger.info("Header may have been deleted.")
             return [4]
         elif len(header_cols) != starting_new_header_len and \
-            len(missing_header_cols) == 0:
+            len(missing_header_cols) != 0 and len(header_cols) == 0:
             # at least some columns matched
             logger.info("Columns deleted.")
+            #logger.debug("MISSING HEADER %s", missing_header_cols)
             return [3, missing_header_cols]
         elif len(header_cols) != 0 and len(missing_header_cols) != 0:
             # columns added and deleted
             logger.info("Columns added and deleted")
             return [6, header_cols, missing_header_cols]
         else:
+            #TODO: trap here to check for addition
+            logger.info("new header cols: %s starting_new_header_len: %s missing_header_cols: %s", header_cols, starting_new_header_len, missing_header_cols)
+
             logger.info("%s header does not match old header.", new_file)
             logger.info("New column(s) found: %s", header_cols)
             return [2, header_cols]
@@ -672,7 +766,7 @@ def configure_logging(verbose):
     logger.setLevel(logging.DEBUG)
     # logging to file
     file_handler_logger = logging.FileHandler('data_inbox.log')
-    file_handler_logger.setLevel(logging.DEBUG)
+    file_handler_logger.setLevel(logging.INFO)
     file_handler_logger.setFormatter(formatter)
     logger.addHandler(file_handler_logger)
 
@@ -695,14 +789,28 @@ def send_report(report, from_address, to_address, mail_server):
     from_address -- email address the report will come from.
     to_address -- email address the report is going to.
     """
-    msg = MIMEText(report)
-    msg['Subject'] = \
-        "data_inbox report for " + str(datetime.datetime.now()) + "\n"
-    msg['From'] = from_address
-    msg['To'] = to_address
-    mail_connection = smtplib.SMTP(mail_server)
-    mail_connection.sendmail(from_address, to_address, msg.as_string())
-    mail_connection.quit()
+    #subj = "data_inbox report for " + str(datetime.datetime.now())
+    #mail_string = "-s " + "'" + subj + "'" + " " + to_address + " < " + "'" + report + "'"
+    #print(mail_string)
+    #call(["mail", mail_string])
+    #msg['Subject'] = \
+    #    "data_inbox report for " + str(datetime.datetime.now()) + "\n"
+    #msg['From'] = from_address
+    #msg['To'] = to_address
+    #os.system('subj=%', "'data_inbox report for ' + str(datetime.datetime.now()) + '\n'""
+    #os.system("mail -s '$subj' BMI-DEVELOPERS@ad.ufl.edu < /dev/null
+    #mail_connection = smtplib.SMTP(mail_server)
+    #mail_connection.sendmail(from_address, to_address, msg.as_string())
+    #mail_connection.quit()
+
+def write_report(report, logger):
+    """Write report out to a file so it can be sent later.
+    """
+    report_file_name = str(date.today()).replace('-', '') + "_report.txt"
+    with open(report_file_name, 'w') as f:
+        for row in report:
+            f.write(row)
+    logger.debug("Finished writing report out.")
 
 if __name__ == '__main__':
     main()

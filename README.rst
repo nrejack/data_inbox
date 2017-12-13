@@ -14,9 +14,17 @@ Getting started
 
 ::
 
-  mkvirtualenv data_inbox -p /usr/local/bin/python3
+  mkvirtualenv data_inbox -p `which python3`
   pip install -r requirements.txt
 
+- If you are not able to complete the pip install step, you may need to upgrade your
+  version of pip.
+
+  ::
+  wget https://bootstrap.pypa.io/get-pip.py
+  python get-pip.py
+  pip install -r requirements.txt
+  
 - data_inbox tracks information about the partner filesets in a sqlite database.
   Several .sql files are stored in the sql/ directory that contain information about your environment to get you started.
 - If needed, edit the partner_data.sql file to specify the correct file locations.
