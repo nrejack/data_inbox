@@ -2,8 +2,47 @@
 Changelog
 =========
 
+Version 0.2
+===========
+Summary: Improved reporting: exceptions are now highlighted at the top of the
+report. Bugfixes from problems encountered while matching new filetypes.
+
+Added exception trapping for when a non-text file that is not on the blacklist of filetypes appears.
+When no exceptions are found on a run, report reflects this.
+Clean up formatting of log messages while building fileset.
+Improved ability to skip directories when buildling fileset.
+Modified delimiter checking code and added | as option
+Modifying reporting.
+Clean up spacing in report.
+Added exception reporting to top of report.
+Corrected deleted columns reporting- now shows deleted previous columns.
+Adding version number to final report.
+Adding changelog as CHANGES.rst
+Reducing volume of logger messages.
+Updates to README after initial deployment.
+Adding missing underscore to report name
+report.txt now has date appended to filename
+Write out report to report.txt.
+Changing send_report to use unix mail
+Write correct filename to file_run_status
+Verify that a directory does not have just directories inside it when checking for new files.
+Don't try and split filenames if it's a directory.
+Check whether file is a directory when scanning header.
+Catching UnicodeDecodeError exception.
+Removing unnessary print statement.
+When scanning directories, make sure to check the full path.
+Fixed another early exit.
+Removed early exit before all sql files are read in.
+Fixing typos.
+data_inbox/data_inbox.py
+Fix to not attempt to scan files that are not directories.
+Merge tag '0.1' into develop
+
 Version 0.1
 ===========
+Summary: initial release with ability to build fileset records and scan incoming
+files to check headers against the fileset records.
+
 Merge branch 'release/0.1'
 Fixed logic that stores the status when columns have been both deleted and added.
 Additional cleanup from pylint, new score 8.73/10
