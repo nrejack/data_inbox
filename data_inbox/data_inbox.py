@@ -227,7 +227,7 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     report += "\n\n :: Exceptions ::\n--------------------\n"
     initial_report_len = len(report)
     report += run_file_report(conn, logger, current_run_id, partner_info, detailed = False)
-    logger.debug("len report: %s %s ", len(report.rstrip()), initial_report_len)
+    logger.debug("len report: %s %s ", len(report), initial_report_len)
     if len(report) == initial_report_len:
         report += "None noted.\n\n"
     return report + "\n"
@@ -261,7 +261,7 @@ def run_file_report(conn, logger, current_run_id, partner_info, detailed = True)
             logger.debug(item)
             report += get_file_status(logger, item['code'], item)
         do_once = True
-        while do_once:
+        while do_once and detailed:
             report += "\n"
             do_once = False
     if detailed:
