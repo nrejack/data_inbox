@@ -223,8 +223,8 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     """Generate exception report."""
     logger.info("Starting exception report.")
     report = "OneFlorida Data Trust partner file check for " \
-            + str(datetime.datetime.now())
-    report += "\n\n :: Exceptions ::\n--------------------\n\n"
+            + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    report += "\n\n :: Exceptions ::\n--------------------\n"
     initial_report_len = len(report)
     report += run_file_report(conn, logger, current_run_id, partner_info, detailed = False)
     logger.debug("len report: %s %s ", len(report.rstrip()), initial_report_len)
