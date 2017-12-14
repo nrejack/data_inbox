@@ -277,7 +277,13 @@ def get_file_status(logger, code, item):
         return "{} has no change in header. OK to process.\n" \
             .format(item['filename_pattern'])
     elif code == 2:
-        return "{} has a new column {}. Check before processing.\n" \
+        # TODO: fix below. reading item['cols_add'] as a string and
+        # if len(list(item['cols_add'])) == 1:
+        #     return "{} has a new column {}. Check before processing.\n" \
+        #         .format(item['filename_pattern'], item['cols_add'])
+        # elif len(item['cols_add']) >= 2:
+        #     logger.debug("len: %s %s", len(list(item['cols_add'])), list(item['cols_add']))
+        return "{} has new columns {}. Check before processing.\n" \
             .format(item['filename_pattern'], item['cols_add'])
     elif code == 3:
         return "{} is missing previously existing column(s) {}. " \
@@ -289,8 +295,8 @@ def get_file_status(logger, code, item):
             .format(item['filename_pattern'])
     #TODO does this ever get triggered?
     elif code == 5:
-        return "{} is a new or unidentified filetype. Update \
-            partners_filesets to match.\n"\
+        return "{} is a new or unidentified filetype. Update "\
+            "partners_filesets to match.\n"\
             .format(item['filename_pattern'])
     elif code == 6:
         return "{} has missing columns {} and new columns {}. Check" \
@@ -459,7 +465,7 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 conn.execute("INSERT INTO file_run_status (code, \
                     partner, run_id, filename_pattern, filetype) \
                     VALUES (?, ?, ?, ?, ?)", (5, pid, current_run_id, \
-                    filename, "unknown"))
+                    new_file_trim, "unknown"))
             else:
                 filename = max_score['filename']
                 cols = ""
