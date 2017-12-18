@@ -1,0 +1,15 @@
+data_inbox 0.2 release notes
+December 13, 2017
+----------------------------
+
+NEW:
+    -Exceptions are now at the top of the report. No need to scan the detailed
+        section to see what's changed.
+
+IMPROVEMENTS:
+    -Better exception trapping to prevent scanning non-text files (pdf, etc.)
+    -Interactive mode for building filesets now allows skipping directories.
+    
+FIXES:
+    -Added | to list of allowed delimiters.
+    -Fixed a bug where the name of deleted columns was not shown in the report.
