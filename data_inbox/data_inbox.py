@@ -34,7 +34,7 @@ FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip', 'jpeg', 'jpg']
 
 # logging settings
 # log file size in bytes
-MAX_LOG_FILE_SIZE = 150
+MAX_LOG_FILE_SIZE = 15000000
 BACKUP_COUNT_LOG_FILES = 5
 
 # set the minimum match ratio for fuzzy matching
