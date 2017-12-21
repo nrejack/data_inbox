@@ -364,6 +364,7 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
             conn.execute('INSERT INTO partner_run_status \
                 (code, partner, run_id) VALUES (?, ?, ?)', \
                 (error_code, partner['id'], current_run_id))
+
 def make_partners_to_check_list(partner_info, conn, logger, current_run_id):
     """Generate list of partners to check"""
     partners_to_check = []
@@ -781,7 +782,7 @@ def configure_logging(verbose):
     #formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(funcName)s - %(message)s')
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     # logging to file
-    file_handler_logger = logging.handlers.RotatingFileHandler('data_inbox.log',
+    file_handler_logger = logging.handlers.RotatingFileHandler('log/data_inbox.log',
         maxBytes=MAX_LOG_FILE_SIZE, backupCount=BACKUP_COUNT_LOG_FILES)
     file_handler_logger.setLevel(logging.INFO)
     file_handler_logger.setFormatter(formatter)
