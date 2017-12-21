@@ -184,27 +184,23 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
         partner_name = partner_info[row['partner']]['name_full']
         partner_directory = partner_info[row['partner']]['incoming_file_directory']
         if row['code'] == 1:
-            message = "Partner {} has no new data in the current run {}"\
-                        .format(partner_name, current_run_id)
-            logger.info(message)
+            logger.info("Partner %s has no new data in the current run %s ",\
+                            partner_name, current_run_id)
             no_new_data += partner_name + "\n"
 
         if row['code'] == 2:
-            message = "Partner {} directory {} not found in the current run {}\
-                ".format(partner_name, partner_directory, current_run_id)
-            logger.info(message)
+            logger.info("Partner %s directory %s not found in the current run %s",\
+                partner_name, partner_directory, current_run_id)
             dir_not_found += partner_name + "\n"
 
         if row['code'] == 3:
-            message = "Partner {} has new files in the current run {}" \
-                .format(partner_name, current_run_id)
-            logger.info(message)
+            logger.info("Partner %s has new files in the current run %s", \
+                partner_name, current_run_id)
             new_files += partner_name + "\n"
 
         if row['code'] == 4:
-            message = "Partner {} is set to not be checked {}" \
-                .format(partner_name, current_run_id)
-            logger.info(message)
+            logger.info("Partner %s is set to not be checked %s", \
+                partner_name, current_run_id)
             not_checked += partner_name + "\n"
 
     if len(no_new_data) > no_new_data_initial_len:
