@@ -11,6 +11,7 @@ import smtplib
 from email.mime.text import MIMEText
 from string import digits
 import logging
+import logging.handlers
 import sqlite3
 import shutil
 import os
@@ -30,6 +31,12 @@ FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
 FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip', 'jpeg', 'jpg']
+
+# logging settings
+# log file size in bytes
+MAX_LOG_FILE_SIZE = 150
+BACKUP_COUNT_LOG_FILES = 5
+
 # set the minimum match ratio for fuzzy matching
 MATCH_RATIO = 80
 
@@ -224,13 +231,14 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
             + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     report += "\n\n :: Exceptions ::\n--------------------\n"
     initial_report_len = len(report)
-    report += run_file_report(conn, logger, current_run_id, partner_info, detailed = False)
+    report += run_file_report(conn, logger, current_run_id, partner_info, detailed=False)
     logger.debug("len report: %s %s ", len(report), initial_report_len)
     if len(report) == initial_report_len:
         report += "None noted.\n\n"
     return report + "\n"
 
-def run_file_report(conn, logger, current_run_id, partner_info, detailed = True):
+def run_file_report(conn, logger, current_run_id, partner_info, detailed=True):
+    """Report on the status of the individual files for a partner."""
     report = ""
     if detailed:
         report = "\n\nDetailed report\n--------------------\n\n"
@@ -302,6 +310,7 @@ def get_file_status(logger, code, item):
         "Header(s) have not been checked.\n"
 
 def setup_tables(conn, logger):
+    """Make the empty tables. Only run once at initial setup."""
     create_sql = input("Do you wish to create the needed SQL tables? (y/n) ")
     if create_sql.upper() == 'Y':
         logger.info("Creating necessary tables.")
@@ -767,11 +776,13 @@ def dict_factory(cursor, row):
 def configure_logging(verbose):
     """Configure the logger."""
     # set up logging
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
+    #formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(funcName)s - %(message)s')
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     # logging to file
-    file_handler_logger = logging.FileHandler('data_inbox.log')
+    file_handler_logger = logging.handlers.RotatingFileHandler('data_inbox.log',
+        maxBytes=MAX_LOG_FILE_SIZE, backupCount=BACKUP_COUNT_LOG_FILES)
     file_handler_logger.setLevel(logging.INFO)
     file_handler_logger.setFormatter(formatter)
     logger.addHandler(file_handler_logger)
