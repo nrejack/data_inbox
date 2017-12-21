@@ -78,9 +78,11 @@ def main(verbose, create, buildfileset):
     # TODO: abstract the data access methods
     partner_list_query = "SELECT id, name, name_full, incoming_file_directory FROM partners"
     partner_info = {}
-    logger.debug("Dictionary of partners")
+    if verbose:
+        logger.debug("Dictionary of partners")
     for row in conn.execute(partner_list_query):
-        logger.debug(row)
+        if verbose:
+            logger.debug(row)
         partner_info[row['id']] = row
 
     # get the next key for the run id
@@ -130,7 +132,7 @@ def check_run_id(conn_cursor, conn, logger):
     else:
         current_run_id = penultiumate_run_id + 1
     logger.debug("Penultiumate run ID: %i", penultiumate_run_id)
-    logger.info("This is current_run_status id %i", current_run_id)
+    logger.info("This is current_run_id %i", current_run_id)
     # update the run table
     current_date = datetime.datetime.now()
     conn.execute("INSERT INTO current_run_status (run_date) VALUES (current_date)")
@@ -766,7 +768,7 @@ def dict_factory(cursor, row):
 def configure_logging(verbose):
     """Configure the logger."""
     # set up logging
-    logger = logging.getLogger()
+    logger = logging.getLogger(__name__)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     logger.setLevel(logging.DEBUG)
     # logging to file
