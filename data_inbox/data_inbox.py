@@ -184,25 +184,25 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
         partner_name = partner_info[row['partner']]['name_full']
         partner_directory = partner_info[row['partner']]['incoming_file_directory']
         if row['code'] == 1:
-            message = "Partner {} has no new data in the current run {}\n"\
+            message = "Partner {} has no new data in the current run {}"\
                         .format(partner_name, current_run_id)
             logger.info(message)
             no_new_data += partner_name + "\n"
 
         if row['code'] == 2:
-            message = "Partner {} directory {} not found in the current run {}\n\
+            message = "Partner {} directory {} not found in the current run {}\
                 ".format(partner_name, partner_directory, current_run_id)
             logger.info(message)
             dir_not_found += partner_name + "\n"
 
         if row['code'] == 3:
-            message = "Partner {} has new files in the current run {}\n" \
+            message = "Partner {} has new files in the current run {}" \
                 .format(partner_name, current_run_id)
             logger.info(message)
             new_files += partner_name + "\n"
 
         if row['code'] == 4:
-            message = "Partner {} is set to not be checked {}\n" \
+            message = "Partner {} is set to not be checked {}" \
                 .format(partner_name, current_run_id)
             logger.info(message)
             not_checked += partner_name + "\n"
@@ -420,6 +420,9 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 logger.debug("partner_fileset len: %i", len(partner_fileset))
             #logger.debug(partner_fileset)
             logger.info("Now checking new file %s", new_file)
+            if os.path.isdir(directory + new_file):
+                logger.info("%s is a directory and will not be checked.", new_file)
+                continue
             try:
                 file_extension = new_file.split('.')[1].lower()
             except IndexError:
@@ -769,8 +772,8 @@ def configure_logging(verbose):
     """Configure the logger."""
     # set up logging
     logger = logging.getLogger(__name__)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     # logging to file
     file_handler_logger = logging.FileHandler('data_inbox.log')
     file_handler_logger.setLevel(logging.INFO)
