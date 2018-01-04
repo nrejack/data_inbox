@@ -2,6 +2,31 @@
 Changelog
 =========
 
+Version 0.3
+===========
+Summary: Added log rotation to prevent them from growing too large. New and old
+headers can have different delimiters.
+
+Bumping version number to 0.3
+When comparing headers, new and old headers can have different delimiters now.
+Adding placeholder initial log file in log/ directory.
+Changed default log file size to 15 MB.
+Write logs to new log/ directory
+Changed file logger to rotate based on size.
+Simplify logging in partner_report function.
+No longer try to check directories one level down in partner directories.
+Adjusting debug messages to log only if in verbose mode.
+Adding fileset_db* to .gitignore.
+Adding 0.2 release notes text file.
+Merge branch 'master' of https://bmi.program.ufl.edu/bitbucket/scm/on/data_inbox
+Drop microseconds from datetime in report.
+Fixing so newline not appended when running exception report.
+Added message that appears when no exceptions are noted.
+Corrected error where file has 0 match. Now stores actual name of file on disk.
+Add extra newline when reporting exceptions.
+Merge tag '0.2' into develop
+Updating CHANGES.rst for 0.2 release.
+
 Version 0.2
 ===========
 Summary: Improved reporting: exceptions are now highlighted at the top of the
