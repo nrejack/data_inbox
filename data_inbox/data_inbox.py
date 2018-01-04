@@ -229,11 +229,14 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     logger.info("Starting exception report.")
     report = "OneFlorida Data Trust partner file check for " \
             + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    report += "\n\n :: Exceptions ::\n--------------------\n\n"
-    initial_report_len = len(report)
+    report += "\n\n :: Exceptions ::\n--------------------\n"
+    # this is hacky
+    # we want to see if anything changed but ignore newlines
+    # better way would be with a flag
+    initial_report_len = len(report.replace("\n", ""))
     report += run_file_report(conn, logger, current_run_id, partner_info, detailed=False)
     logger.debug("len report: %s %s ", len(report), initial_report_len)
-    if len(report) == initial_report_len:
+    if len(report.replace("\n", "")) == initial_report_len:
         report += "None noted.\n\n"
     return report + "\n"
 
