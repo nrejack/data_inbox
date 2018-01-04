@@ -11,6 +11,7 @@ import smtplib
 from email.mime.text import MIMEText
 from string import digits
 import logging
+import logging.handlers
 import sqlite3
 import shutil
 import os
@@ -22,7 +23,7 @@ import click
 import fileset_db
 from fuzzywuzzy import fuzz
 
-VERSION_NUMBER = '0.2'
+VERSION_NUMBER = '0.3'
 PARTNER_DATA_FILE = 'partner_data.sql'
 PARTNER_ERROR_CODES_DATA_FILE = 'partner_error_codes.sql'
 FILE_ERROR_CODES_DATA_FILE = 'file_error_codes.sql'
@@ -30,6 +31,12 @@ FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
 FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip', 'jpeg', 'jpg']
+
+# logging settings
+# log file size in bytes
+MAX_LOG_FILE_SIZE = 15000000
+BACKUP_COUNT_LOG_FILES = 5
+
 # set the minimum match ratio for fuzzy matching
 MATCH_RATIO = 80
 
@@ -145,7 +152,7 @@ def commit_tran(conn, logger):
 
 def read_in_sql_files(sql_file, logger, conn):
     """Read passed in .sql files to load their data into the DB."""
-    create_sql = input("Do you wish to read the {}file into the tables?(y/n) " \
+    create_sql = input("Do you wish to read the {} file into the tables?(y/n) " \
         .format(sql_file))
     if create_sql.upper() == 'Y':
         logger.info("Reading in data.")
@@ -184,27 +191,23 @@ def run_partner_report(conn, logger, current_run_id, partner_info):
         partner_name = partner_info[row['partner']]['name_full']
         partner_directory = partner_info[row['partner']]['incoming_file_directory']
         if row['code'] == 1:
-            message = "Partner {} has no new data in the current run {}\n"\
-                        .format(partner_name, current_run_id)
-            logger.info(message)
+            logger.info("Partner %s has no new data in the current run %s ",\
+                            partner_name, current_run_id)
             no_new_data += partner_name + "\n"
 
         if row['code'] == 2:
-            message = "Partner {} directory {} not found in the current run {}\n\
-                ".format(partner_name, partner_directory, current_run_id)
-            logger.info(message)
+            logger.info("Partner %s directory %s not found in the current run %s",\
+                partner_name, partner_directory, current_run_id)
             dir_not_found += partner_name + "\n"
 
         if row['code'] == 3:
-            message = "Partner {} has new files in the current run {}\n" \
-                .format(partner_name, current_run_id)
-            logger.info(message)
+            logger.info("Partner %s has new files in the current run %s", \
+                partner_name, current_run_id)
             new_files += partner_name + "\n"
 
         if row['code'] == 4:
-            message = "Partner {} is set to not be checked {}\n" \
-                .format(partner_name, current_run_id)
-            logger.info(message)
+            logger.info("Partner %s is set to not be checked %s", \
+                partner_name, current_run_id)
             not_checked += partner_name + "\n"
 
     if len(no_new_data) > no_new_data_initial_len:
@@ -228,13 +231,14 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
             + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     report += "\n\n :: Exceptions ::\n--------------------\n"
     initial_report_len = len(report)
-    report += run_file_report(conn, logger, current_run_id, partner_info, detailed = False)
+    report += run_file_report(conn, logger, current_run_id, partner_info, detailed=False)
     logger.debug("len report: %s %s ", len(report), initial_report_len)
     if len(report) == initial_report_len:
         report += "None noted.\n\n"
     return report + "\n"
 
-def run_file_report(conn, logger, current_run_id, partner_info, detailed = True):
+def run_file_report(conn, logger, current_run_id, partner_info, detailed=True):
+    """Report on the status of the individual files for a partner."""
     report = ""
     if detailed:
         report = "\n\nDetailed report\n--------------------\n\n"
@@ -306,6 +310,7 @@ def get_file_status(logger, code, item):
         "Header(s) have not been checked.\n"
 
 def setup_tables(conn, logger):
+    """Make the empty tables. Only run once at initial setup."""
     create_sql = input("Do you wish to create the needed SQL tables? (y/n) ")
     if create_sql.upper() == 'Y':
         logger.info("Creating necessary tables.")
@@ -359,6 +364,7 @@ def check_partner_dirs(partner_info, conn, logger, current_run_id):
             conn.execute('INSERT INTO partner_run_status \
                 (code, partner, run_id) VALUES (?, ?, ?)', \
                 (error_code, partner['id'], current_run_id))
+
 def make_partners_to_check_list(partner_info, conn, logger, current_run_id):
     """Generate list of partners to check"""
     partners_to_check = []
@@ -420,6 +426,9 @@ def check_partner_files(partner_info, conn, logger, current_run_id):
                 logger.debug("partner_fileset len: %i", len(partner_fileset))
             #logger.debug(partner_fileset)
             logger.info("Now checking new file %s", new_file)
+            if os.path.isdir(directory + new_file):
+                logger.info("%s is a directory and will not be checked.", new_file)
+                continue
             try:
                 file_extension = new_file.split('.')[1].lower()
             except IndexError:
@@ -562,7 +571,7 @@ def add_new_fileset(conn, logger):
         try:
             list_of_dirs = os.listdir(directory)
         except:
-            logger.error("Directory %s not found.", directory)
+            logger.error("Directory %s not found.", directory, exc_info = True)
             continue
         if not list_of_dirs:
             logger.info("File directory empty for %s. Skipping building fileset.", name)
@@ -716,8 +725,8 @@ def check_header(new_file, partner_directory, prev_header, logger):
 
         logger.debug("Header for file %s:\n%s", new_file, header_row.strip())
         header_cols, delim = find_delim_and_split(header_row, logger)
-        logger.debug("DELIMITER: %s", delim)
-        prev_header = prev_header.split(delim)
+        logger.debug("Delimiter for new header: %s", delim)
+        prev_header, new_delim = find_delim_and_split(prev_header, logger)
         missing_header_cols = []
         #logger.debug(header_cols)
         #logger.debug(prev_header)
@@ -768,11 +777,13 @@ def dict_factory(cursor, row):
 def configure_logging(verbose):
     """Configure the logger."""
     # set up logging
-    logger = logging.getLogger(__name__)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
+    #formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(funcName)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     # logging to file
-    file_handler_logger = logging.FileHandler('data_inbox.log')
+    file_handler_logger = logging.handlers.RotatingFileHandler('log/data_inbox.log',
+        maxBytes=MAX_LOG_FILE_SIZE, backupCount=BACKUP_COUNT_LOG_FILES)
     file_handler_logger.setLevel(logging.INFO)
     file_handler_logger.setFormatter(formatter)
     logger.addHandler(file_handler_logger)
@@ -817,7 +828,7 @@ def write_report(report, logger):
     with open(report_file_name, 'w') as f:
         for row in report:
             f.write(row)
-    logger.debug("Finished writing report out.")
+    logger.info("Finished writing report out.")
 
 if __name__ == '__main__':
     main()
