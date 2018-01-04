@@ -152,7 +152,7 @@ def commit_tran(conn, logger):
 
 def read_in_sql_files(sql_file, logger, conn):
     """Read passed in .sql files to load their data into the DB."""
-    create_sql = input("Do you wish to read the {}file into the tables?(y/n) " \
+    create_sql = input("Do you wish to read the {} file into the tables?(y/n) " \
         .format(sql_file))
     if create_sql.upper() == 'Y':
         logger.info("Reading in data.")
@@ -571,7 +571,7 @@ def add_new_fileset(conn, logger):
         try:
             list_of_dirs = os.listdir(directory)
         except:
-            logger.error("Directory %s not found.", directory)
+            logger.error("Directory %s not found.", directory, exc_info = True)
             continue
         if not list_of_dirs:
             logger.info("File directory empty for %s. Skipping building fileset.", name)
@@ -725,8 +725,8 @@ def check_header(new_file, partner_directory, prev_header, logger):
 
         logger.debug("Header for file %s:\n%s", new_file, header_row.strip())
         header_cols, delim = find_delim_and_split(header_row, logger)
-        logger.debug("DELIMITER: %s", delim)
-        prev_header = prev_header.split(delim)
+        logger.debug("Delimiter for new header: %s", delim)
+        prev_header, new_delim = find_delim_and_split(prev_header, logger)
         missing_header_cols = []
         #logger.debug(header_cols)
         #logger.debug(prev_header)
@@ -828,7 +828,7 @@ def write_report(report, logger):
     with open(report_file_name, 'w') as f:
         for row in report:
             f.write(row)
-    logger.debug("Finished writing report out.")
+    logger.info("Finished writing report out.")
 
 if __name__ == '__main__':
     main()
