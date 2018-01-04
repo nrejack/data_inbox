@@ -23,7 +23,7 @@ import click
 import fileset_db
 from fuzzywuzzy import fuzz
 
-VERSION_NUMBER = '0.2'
+VERSION_NUMBER = '0.3'
 PARTNER_DATA_FILE = 'partner_data.sql'
 PARTNER_ERROR_CODES_DATA_FILE = 'partner_error_codes.sql'
 FILE_ERROR_CODES_DATA_FILE = 'file_error_codes.sql'
