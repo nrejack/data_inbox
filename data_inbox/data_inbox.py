@@ -30,7 +30,7 @@ FILE_ERROR_CODES_DATA_FILE = 'file_error_codes.sql'
 FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
-FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip', 'jpeg', 'jpg']
+FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip', 'jpeg', 'jpg', 'DS_Store']
 
 # logging settings
 # log file size in bytes
@@ -229,7 +229,7 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     logger.info("Starting exception report.")
     report = "OneFlorida Data Trust partner file check for " \
             + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    report += "\n\n :: Exceptions ::\n--------------------\n\n"
+    report += "\n\n :: Exceptions ::\n--------------------\n"
     # this is hacky
     # we want to see if anything changed but ignore newlines
     # better way would be with a flag
@@ -237,7 +237,7 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     report += run_file_report(conn, logger, current_run_id, partner_info, detailed=False)
     logger.debug("len report: %s %s ", len(report), initial_report_len)
     if len(report.replace("\n", "")) == initial_report_len:
-        report += "None noted.\n\n"
+        report += "\nNone noted.\n\n"
     return report + "\n"
 
 def run_file_report(conn, logger, current_run_id, partner_info, detailed=True):
@@ -263,7 +263,7 @@ def run_file_report(conn, logger, current_run_id, partner_info, detailed=True):
             if item['code'] == 1 and not detailed:
                 continue
             while do_once:
-                report += partner_name['name_full'] +"\n"
+                report += "\n" + partner_name['name_full'] +"\n"
                 report += "-----------------------\n"
                 do_once = False
             logger.debug("Partner %s %s ", partner_code, partner_name)
