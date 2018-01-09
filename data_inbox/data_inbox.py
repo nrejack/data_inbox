@@ -229,7 +229,7 @@ def generate_exception_report(conn, logger, current_run_id, partner_info):
     logger.info("Starting exception report.")
     report = "OneFlorida Data Trust partner file check for " \
             + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    report += "\n\n :: Exceptions ::\n--------------------\n"
+    report += "\n\n :: Exceptions ::\n--------------------\n\n"
     # this is hacky
     # we want to see if anything changed but ignore newlines
     # better way would be with a flag
