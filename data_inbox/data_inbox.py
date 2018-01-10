@@ -782,11 +782,18 @@ def dict_factory(cursor, row):
 def configure_logging(verbose):
     """Configure the logger."""
     # set up logging
+    log_directory = 'log/'
+    log_file_name = 'data_inbox.log'
+    log_file_path = os.path.join(log_directory, log_file_name)
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     #formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(funcName)s - %(message)s')
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     # logging to file
+    if not os.path.exists(log_directory):
+        os.makedirs(log_directory, exist_ok=True)
+    if not os.path.exists(log_file_path):
+        open(log_file_path, 'a').close()
     file_handler_logger = logging.handlers.RotatingFileHandler('log/data_inbox.log',
         maxBytes=MAX_LOG_FILE_SIZE, backupCount=BACKUP_COUNT_LOG_FILES)
     file_handler_logger.setLevel(logging.INFO)
