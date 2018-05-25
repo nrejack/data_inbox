@@ -32,4 +32,5 @@ VALUES
   (30, 'HCN_StandardEncounterFeed'),
   (31, 'HCN_VitalFeed'),
   (32, 'Unknown'),
-  (33, 'Tumor')
+  (33, 'Tumor'),
+  (34, 'Tumor Concept')
