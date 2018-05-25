@@ -591,7 +591,7 @@ def add_new_fileset(conn, logger):
                 if os.path.isdir(os.path.join(directory + new_dir)):
                     #print("HERE")
                     get_out = input("\nThere are {} remaining directories to scan " \
-                        "for {}. The next directory is {}.\nDo you wish to continue scanning this partner? (Y/N). Enter (S) to skip scanning the next directory {}." \
+                        "for {}. The next directory is {}.\nDo you wish to continue scanning this partner? (Y/N). Enter (S) to skip scanning the next directory {}: " \
                         .format(list_of_dirs_count, name, new_dir, new_dir))
                     list_of_dirs_count = list_of_dirs_count - 1
                     if get_out == 'N' or get_out == 'n':
@@ -606,7 +606,7 @@ def add_new_fileset(conn, logger):
                                 try:
                                     header = f.readline()
                                 except UnicodeDecodeError:
-                                    logger.info("UnicodeDecodeError: Unable to read header of file %s", new_file)
+                                    logger.info("UnicodeDecodeError: Unable to read header of file %s. Probably not a data file.", new_file)
                                     continue
                             logger.info("Now trying to add file %s to fileset.", new_file)
                             guess_filetype(partner, new_file, filetype_dict, header, conn, logger)
@@ -691,8 +691,8 @@ def add_to_filetype_dict(partner, filetype_id, new_file, header, conn, logger):
             already added for partner. Skipping.")
         return None
     else:
-        logger.info("No existing filetype record found for partner %s \
-            and filetype %i", partner, filetype_id)
+        logger.info("No existing filetype record found for partner %s " \
+            "and filetype %i", partner, filetype_id)
     logger.info("Adding new filetype record.")
     conn.execute("INSERT INTO partners_filesets (pid, date, \
         filename_pattern, filetype, header) VALUES (?, ?, ?, ?, ?)", \
