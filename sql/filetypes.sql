@@ -33,4 +33,4 @@ VALUES
   (31, 'HCN_VitalFeed'),
   (32, 'Unknown'),
   (33, 'Tumor'),
-  (34, 'Tumor Concept')
+  (34, 'Tumor Registry Concept')
