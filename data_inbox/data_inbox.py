@@ -591,8 +591,8 @@ def add_new_fileset(conn, logger):
                 if os.path.isdir(os.path.join(directory + new_dir)):
                     #print("HERE")
                     get_out = input("\nThere are {} remaining directories to scan " \
-                        "for {}. The next directory is {}.\nDo you wish to continue? (Y/N). Enter (S) to skip scanning the next directory. " \
-                        .format(list_of_dirs_count, name, new_dir))
+                        "for {}. The next directory is {}.\nDo you wish to continue scanning this partner? (Y/N). Enter (S) to skip scanning the next directory {}." \
+                        .format(list_of_dirs_count, name, new_dir, new_dir))
                     list_of_dirs_count = list_of_dirs_count - 1
                     if get_out == 'N' or get_out == 'n':
                         break
