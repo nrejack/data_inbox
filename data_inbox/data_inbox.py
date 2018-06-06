@@ -31,6 +31,9 @@ FILETYPES_DATA_FILE = 'filetypes.sql'
 FILESET_DATABASE = 'fileset_db.sqlite'
 FILESET_DATABASE_BACKUP = 'fileset_db.sqlite.bk'
 FILETYPES_TO_SKIP = ['pdf', 'xlsx', 'xls', 'zip', 'jpeg', 'jpg', 'DS_Store']
+# delete any records in the database older than the most current number below
+# default is 30 most recent runs
+MAX_RUNS_TO_KEEP_IN_DB = 30
 
 # logging settings
 # log file size in bytes
@@ -99,6 +102,10 @@ def main(verbose, create, buildfileset):
     if buildfileset:
         add_new_fileset(conn, logger)
         exit()
+
+    # do database maintenance to keep it from getting too big
+    cleanup_database(conn, logger)
+
     # check partner dirs for files
     check_partner_dirs(partner_info, conn, logger, current_run_id)
 
@@ -126,6 +133,38 @@ def main(verbose, create, buildfileset):
     commit_tran(conn, logger)
     logger.info("Closing %s", FILESET_DATABASE)
     conn.close()
+
+def cleanup_database(conn, logger):
+    """Check three tables:
+        current_run_status
+        file_run_status
+        partner_run_status
+
+        and delete any data from runs older than MAX_RUNS_TO_KEEP_IN_DB """
+    logger.info("Starting database cleanup process.")
+    logger.info("Maximum number of runs to keep data on: %s", MAX_RUNS_TO_KEEP_IN_DB)
+    # list of tables to clean up and their keys
+    tables_to_clean = { 'current_run_status': 'id',
+                        'file_run_status': 'run_id',
+                        'partner_run_status': 'run_id'}
+    c = conn.cursor()
+    for table, id_key in tables_to_clean.items():
+        get_key_query = 'SELECT DISTINCT {} FROM {}'.format(id_key, table)
+        get_max_key = 'SELECT MAX({}) FROM {}'.format(id_key, table)
+        list_of_keys = c.execute(get_key_query).fetchall()
+        max_key = c.execute(get_max_key).fetchone()['MAX({})'.format(id_key)]
+        logger.debug("Maximum key is {}".format(max_key))
+        #logger.debug(list_of_keys)
+        #logger.debug(max_key)
+        for item in list_of_keys:
+            current_key = item['{}'.format(id_key)]
+            # if the key is under the threshold
+            # (highest key minus the maxium number to keep), delete it
+            if current_key < max_key - MAX_RUNS_TO_KEEP_IN_DB:
+                logger.info("Deleting record(s) with id %s from the %s table " \
+                "as they are under the threshold to keep.", current_key, table)
+                delete_query = 'DELETE FROM {} WHERE {} = {}'.format(table, id_key, current_key)
+                c.execute(delete_query)
 
 def check_run_id(conn_cursor, conn, logger):
     """Check the previous run's ID and get the current run's ID.
